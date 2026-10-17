@@ -68,6 +68,9 @@ namespace CairoDesktop
 
             Host.Start();
 
+            // recover windows hidden by a previous session that crashed, whether or not tiling is enabled now
+            RestoreTiledWindows();
+
             _initializationService.WriteApplicationDebugInfoToConsole(productVersion: ProductVersion);
 
             _initializationService.LoadExtensions();

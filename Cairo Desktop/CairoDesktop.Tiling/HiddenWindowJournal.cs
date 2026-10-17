@@ -148,7 +148,15 @@ namespace CairoDesktop.Tiling
 
         private void ScheduleSave()
         {
-            _saveTimer.Change(SaveDelayMs, Timeout.Infinite);
+            try
+            {
+                _saveTimer.Change(SaveDelayMs, Timeout.Infinite);
+            }
+            catch (ObjectDisposedException)
+            {
+                // shutting down
+                Save();
+            }
         }
 
         public void Flush()

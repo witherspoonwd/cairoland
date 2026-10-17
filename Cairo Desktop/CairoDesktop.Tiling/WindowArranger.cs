@@ -225,9 +225,12 @@ namespace CairoDesktop.Tiling
 
             if (!User32.SetForegroundWindow(hwnd))
             {
-                // a synthetic Alt tap makes this process the last input source, which lifts the foreground lock
-                SendAltTap();
+                // A synthetic Alt tap makes this process the last input source, which lifts the foreground lock.
+                // Alt goes down before the switch and up after it, so neither window sees a whole tap and
+                // enters menu mode.
+                SendAlt(keyUp: false);
                 User32.SetForegroundWindow(hwnd);
+                SendAlt(keyUp: true);
             }
 
             if (raise)
@@ -236,12 +239,11 @@ namespace CairoDesktop.Tiling
             }
         }
 
-        public static void SendAltTap()
+        private static void SendAlt(bool keyUp)
         {
             User32.INPUT[] inputs =
             {
-                new User32.INPUT { type = User32.INPUT_KEYBOARD, U = new User32.InputUnion { ki = new User32.KEYBDINPUT { wVk = User32.VK_MENU } } },
-                new User32.INPUT { type = User32.INPUT_KEYBOARD, U = new User32.InputUnion { ki = new User32.KEYBDINPUT { wVk = User32.VK_MENU, dwFlags = User32.KEYEVENTF_KEYUP } } }
+                new User32.INPUT { type = User32.INPUT_KEYBOARD, U = new User32.InputUnion { ki = new User32.KEYBDINPUT { wVk = User32.VK_MENU, dwFlags = keyUp ? User32.KEYEVENTF_KEYUP : 0 } } }
             };
 
             User32.SendInput((uint)inputs.Length, inputs, User32.INPUT.Size);

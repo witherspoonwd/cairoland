@@ -707,26 +707,8 @@ namespace CairoDesktop.Tiling
                 return;
             }
 
-            // games and video players that cover the monitor without a caption are left alone
-            bool coversMonitor = WindowArranger.GetVisibleRect(hwnd) == monitor.Bounds
-                && (User32.GetWindowLongPtr(hwnd, User32.GWL_STYLE) & User32.WS_CAPTION) != User32.WS_CAPTION;
-
-            if (coversMonitor && !window.IsAutoFullscreen && tag.FullscreenWindow == null)
+            if (UpdateAutoFullscreen(window, monitor, tag))
             {
-                window.IsAutoFullscreen = true;
-                tag.FullscreenWindow = window.Id;
-                MarkDirty(monitor);
-                return;
-            }
-
-            if (!coversMonitor && window.IsAutoFullscreen)
-            {
-                window.IsAutoFullscreen = false;
-                if (tag.FullscreenWindow == window.Id)
-                {
-                    tag.FullscreenWindow = null;
-                }
-
                 MarkDirty(monitor);
                 return;
             }
@@ -742,6 +724,36 @@ namespace CairoDesktop.Tiling
         #endregion
 
         #region Managing windows
+
+        /// <summary>
+        /// Games and video players that cover the monitor without a caption are treated as fullscreen and left
+        /// alone. Returns true if the window's fullscreen state changed.
+        /// </summary>
+        private static bool UpdateAutoFullscreen(ManagedWindow window, MonitorState monitor, Tag tag)
+        {
+            bool coversMonitor = WindowArranger.GetVisibleRect(window.Hwnd) == monitor.Bounds
+                && (User32.GetWindowLongPtr(window.Hwnd, User32.GWL_STYLE) & User32.WS_CAPTION) != User32.WS_CAPTION;
+
+            if (coversMonitor && !window.IsAutoFullscreen && tag.FullscreenWindow == null)
+            {
+                window.IsAutoFullscreen = true;
+                tag.FullscreenWindow = window.Id;
+                return true;
+            }
+
+            if (!coversMonitor && window.IsAutoFullscreen)
+            {
+                window.IsAutoFullscreen = false;
+                if (tag.FullscreenWindow == window.Id)
+                {
+                    tag.FullscreenWindow = null;
+                }
+
+                return true;
+            }
+
+            return false;
+        }
 
         private bool TryManage(IntPtr hwnd, bool focus)
         {
@@ -778,6 +790,11 @@ namespace CairoDesktop.Tiling
             _windows[hwnd] = window;
             monitor.TagSet.AddWindow(window.Id, monitor.TagSet.SelectedIndex, state);
             _logger.LogDebug($"Tiling: managing {window} as {state} on {monitor.DeviceName}");
+
+            if (state != WindowState.Minimized)
+            {
+                UpdateAutoFullscreen(window, monitor, monitor.TagSet.SelectedTag);
+            }
 
             if (focus && state != WindowState.Minimized)
             {
