@@ -1,4 +1,5 @@
-﻿using ManagedShell.Interop;
+﻿using CairoDesktop.Interop;
+using ManagedShell.Interop;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -7,17 +8,32 @@ using System.Windows.Input;
 
 namespace CairoDesktop.Common
 {
-    /// <summary>
-    /// Need to make this honor modifier keys, ie Win+Tab
-    /// </summary>
     /// <remarks>
     /// Created from:
     /// http://www.dylansweb.com/2014/10/low-level-global-keyboard-hook-sink-in-c-net/
     /// https://www.codeproject.com/Articles/19004/A-Simple-C-Global-Low-Level-Keyboard-Hook
+    ///
+    /// When an OnKeyDown handler swallows a key, the matching key up is swallowed too, so no key is left
+    /// half-pressed. Swallowing a key while Win is held masks the Win key up with a dummy keystroke, so
+    /// the shell doesn't treat it as a lone Win press.
     /// </remarks>
     public class LowLevelKeyboardListener
     {
         private const int WH_KEYBOARD_LL = 13;
+        private const int LLKHF_INJECTED = 0x10;
+        private const int VK_LWIN = 0x5B;
+        private const int VK_RWIN = 0x5C;
+        private const ushort VK_MASK = 0xE8; // unassigned; used the same way AutoHotkey masks the Win key
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct KBDLLHOOKSTRUCT
+        {
+            public int vkCode;
+            public int scanCode;
+            public int flags;
+            public int time;
+            public IntPtr dwExtraInfo;
+        }
 
         [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
         private static extern IntPtr SetWindowsHookEx(int idHook, LowLevelKeyboardProc lpfn, IntPtr hMod, uint dwThreadId);
@@ -42,6 +58,11 @@ namespace CairoDesktop.Common
         private IntPtr _hookID = IntPtr.Zero;
 
         private List<int> keysPressed = new List<int>();
+        private readonly HashSet<int> _keysDown = new HashSet<int>();
+        private readonly HashSet<int> _swallowed = new HashSet<int>();
+        private bool _maskWinUp;
+
+        public bool IsHooked => _hookID != IntPtr.Zero;
 
         public LowLevelKeyboardListener()
         {
@@ -50,12 +71,24 @@ namespace CairoDesktop.Common
 
         public void HookKeyboard()
         {
-            _hookID = SetHook(_proc);
+            if (_hookID == IntPtr.Zero)
+            {
+                _hookID = SetHook(_proc);
+            }
         }
 
         public void UnHookKeyboard()
         {
-            UnhookWindowsHookEx(_hookID);
+            if (_hookID != IntPtr.Zero)
+            {
+                UnhookWindowsHookEx(_hookID);
+                _hookID = IntPtr.Zero;
+            }
+
+            _keysDown.Clear();
+            _swallowed.Clear();
+            keysPressed.Clear();
+            _maskWinUp = false;
         }
 
         private IntPtr SetHook(LowLevelKeyboardProc proc)
@@ -67,27 +100,78 @@ namespace CairoDesktop.Common
             }
         }
 
+        private HotKeyModifier CurrentModifiers()
+        {
+            HotKeyModifier modifiers = HotKeyModifier.None;
+            if (_keysDown.Contains(VK_LWIN) || _keysDown.Contains(VK_RWIN)) modifiers |= HotKeyModifier.Win;
+            if (_keysDown.Contains(0xA0) || _keysDown.Contains(0xA1) || _keysDown.Contains(0x10)) modifiers |= HotKeyModifier.Shift;
+            if (_keysDown.Contains(0xA2) || _keysDown.Contains(0xA3) || _keysDown.Contains(0x11)) modifiers |= HotKeyModifier.Ctrl;
+            if (_keysDown.Contains(0xA4) || _keysDown.Contains(0xA5) || _keysDown.Contains(0x12)) modifiers |= HotKeyModifier.Alt;
+            return modifiers;
+        }
+
         private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
         {
             if (nCode >= 0)
             {
-                int vkCode = Marshal.ReadInt32(lParam);
+                KBDLLHOOKSTRUCT data = (KBDLLHOOKSTRUCT)Marshal.PtrToStructure(lParam, typeof(KBDLLHOOKSTRUCT));
+                int vkCode = data.vkCode;
 
-                // keep track of pressed keys so we don't intercept hotkeys
-                if (wParam == (IntPtr)NativeMethods.WM.KEYDOWN || wParam == (IntPtr)NativeMethods.WM.SYSKEYDOWN)
+                // ignore synthetic input, including our own Win mask
+                if ((data.flags & LLKHF_INJECTED) != 0)
                 {
+                    return CallNextHookEx(_hookID, nCode, wParam, lParam);
+                }
+
+                bool isDown = wParam == (IntPtr)NativeMethods.WM.KEYDOWN || wParam == (IntPtr)NativeMethods.WM.SYSKEYDOWN;
+                bool isUp = wParam == (IntPtr)NativeMethods.WM.KEYUP || wParam == (IntPtr)NativeMethods.WM.SYSKEYUP;
+
+                if (isDown)
+                {
+                    // keep track of pressed keys so we don't intercept hotkeys
                     if (!keysPressed.Contains(vkCode))
                         keysPressed.Add(vkCode);
 
-                    var kpa = new KeyEventArgs(KeyInterop.KeyFromVirtualKey(vkCode));
+                    HotKeyModifier modifiers = CurrentModifiers();
+                    _keysDown.Add(vkCode);
+
+                    if (_swallowed.Contains(vkCode))
+                    {
+                        // auto-repeat of a swallowed key
+                        return new IntPtr(1);
+                    }
+
+                    var kpa = new KeyEventArgs(KeyInterop.KeyFromVirtualKey(vkCode), modifiers);
                     OnKeyDown?.Invoke(this, kpa);
                     if (kpa.Handled)
+                    {
+                        _swallowed.Add(vkCode);
+                        if ((modifiers & HotKeyModifier.Win) != 0)
+                        {
+                            _maskWinUp = true;
+                        }
+
                         return new IntPtr(1);
+                    }
                 }
 
                 // act only when key is raised
-                if (wParam == (IntPtr)NativeMethods.WM.KEYUP || wParam == (IntPtr)NativeMethods.WM.SYSKEYUP)
+                if (isUp)
                 {
+                    _keysDown.Remove(vkCode);
+
+                    if (_swallowed.Remove(vkCode))
+                    {
+                        keysPressed.Clear();
+                        return new IntPtr(1);
+                    }
+
+                    if ((vkCode == VK_LWIN || vkCode == VK_RWIN) && _maskWinUp)
+                    {
+                        _maskWinUp = false;
+                        SendMaskKey();
+                    }
+
                     // if more than one key was pressed before a key was raised, user attempted hotkey
                     if (keysPressed.Count == 1 && OnKeyPressed != null)
                     {
@@ -99,7 +183,7 @@ namespace CairoDesktop.Common
 
                     // reset pressed keys
                     keysPressed.Clear();
-                    
+
                     var kpaUp = new KeyEventArgs(KeyInterop.KeyFromVirtualKey(vkCode));
                     OnKeyUp?.Invoke(this, kpaUp);
                     if (kpaUp.Handled)
@@ -109,16 +193,33 @@ namespace CairoDesktop.Common
 
             return CallNextHookEx(_hookID, nCode, wParam, lParam);
         }
+
+        private static void SendMaskKey()
+        {
+            User32.INPUT[] inputs =
+            {
+                new User32.INPUT { type = User32.INPUT_KEYBOARD, U = new User32.InputUnion { ki = new User32.KEYBDINPUT { wVk = VK_MASK } } },
+                new User32.INPUT { type = User32.INPUT_KEYBOARD, U = new User32.InputUnion { ki = new User32.KEYBDINPUT { wVk = VK_MASK, dwFlags = User32.KEYEVENTF_KEYUP } } }
+            };
+
+            User32.SendInput((uint)inputs.Length, inputs, User32.INPUT.Size);
+        }
     }
 
     public class KeyEventArgs : EventArgs
     {
         public Key Key { get; private set; }
+        public HotKeyModifier Modifiers { get; private set; }
         public bool Handled { get; set; }
 
-        public KeyEventArgs(Key key)
+        public KeyEventArgs(Key key) : this(key, HotKeyModifier.None)
+        {
+        }
+
+        public KeyEventArgs(Key key, HotKeyModifier modifiers)
         {
             Key = key;
+            Modifiers = modifiers;
             Handled = false;
         }
     }

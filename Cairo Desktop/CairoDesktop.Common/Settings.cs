@@ -173,7 +173,7 @@ namespace CairoDesktop.Common
             set => Set(ref _enableMenuBarBlur, value);
         }
 
-        private bool _enableMenuBarMultiMon;
+        private bool _enableMenuBarMultiMon = true; // tags are per screen, so each screen needs its own bar
         public bool EnableMenuBarMultiMon
         {
             get => _enableMenuBarMultiMon;
@@ -246,6 +246,111 @@ namespace CairoDesktop.Common
                     SetEnum(ref _menuBarEdge, value);
                 }
             }
+        }
+        #endregion
+
+        #region Tiling
+        private bool _enableTiling = true;
+        public bool EnableTiling
+        {
+            get => _enableTiling;
+            set => Set(ref _enableTiling, value);
+        }
+
+        /// <summary>
+        /// Forces tiling on when Explorer is the shell, for development.
+        /// </summary>
+        private bool _enableTilingOutsideShell;
+        public bool EnableTilingOutsideShell
+        {
+            get => _enableTilingOutsideShell;
+            set => Set(ref _enableTilingOutsideShell, value);
+        }
+
+        private int _tilingGap = 6;
+        public int TilingGap
+        {
+            get => _tilingGap;
+            set => Set(ref _tilingGap, Math.Max(0, value));
+        }
+
+        private bool _tilingFollowActivation = true;
+        public bool TilingFollowActivation
+        {
+            get => _tilingFollowActivation;
+            set => Set(ref _tilingFollowActivation, value);
+        }
+
+        private string[] _tilingFloatClasses = { };
+        public string[] TilingFloatClasses
+        {
+            get => _tilingFloatClasses;
+            set => Set(ref _tilingFloatClasses, value ?? new string[0]);
+        }
+
+        private string[] _tilingFloatExes = { };
+        public string[] TilingFloatExes
+        {
+            get => _tilingFloatExes;
+            set => Set(ref _tilingFloatExes, value ?? new string[0]);
+        }
+
+        /// <summary>
+        /// Base modifier for tiling hotkeys: "Win" or "Alt+Win".
+        /// </summary>
+        private string _tilingModifier = "Win";
+        public string TilingModifier
+        {
+            get => _tilingModifier;
+            set => Set(ref _tilingModifier, value);
+        }
+
+        private bool _enableFocusFollowsMouse = true;
+        public bool EnableFocusFollowsMouse
+        {
+            get => _enableFocusFollowsMouse;
+            set => Set(ref _enableFocusFollowsMouse, value);
+        }
+
+        private bool _focusFollowsMouseRaise;
+        public bool FocusFollowsMouseRaise
+        {
+            get => _focusFollowsMouseRaise;
+            set => Set(ref _focusFollowsMouseRaise, value);
+        }
+
+        private int _focusFollowsMouseDelayMs = 100;
+        public int FocusFollowsMouseDelayMs
+        {
+            get => _focusFollowsMouseDelayMs;
+            set => Set(ref _focusFollowsMouseDelayMs, Math.Max(0, value));
+        }
+
+        /// <summary>
+        /// "Native" uses Windows' active window tracking; "Polling" uses a timer.
+        /// </summary>
+        private string _focusFollowsMouseMode = "Native";
+        public string FocusFollowsMouseMode
+        {
+            get => _focusFollowsMouseMode;
+            set => Set(ref _focusFollowsMouseMode, value);
+        }
+
+        private string _terminalCommand = "wt.exe";
+        public string TerminalCommand
+        {
+            get => _terminalCommand;
+            set => Set(ref _terminalCommand, value);
+        }
+
+        /// <summary>
+        /// Takes Win+L away from Windows so it can be bound to tiling; locking moves to Win+P.
+        /// </summary>
+        private bool _remapWinL = true;
+        public bool RemapWinL
+        {
+            get => _remapWinL;
+            set => Set(ref _remapWinL, value);
         }
         #endregion
 

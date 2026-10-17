@@ -1,0 +1,1601 @@
+using CairoDesktop.Common;
+using CairoDesktop.Infrastructure.ObjectModel;
+using CairoDesktop.Interop;
+using CairoDesktop.Tiling.Core;
+using CairoDesktop.Tiling.ViewModels;
+using ManagedShell.AppBar;
+using ManagedShell.Common.Helpers;
+using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Linq;
+using System.Windows.Threading;
+
+namespace CairoDesktop.Tiling
+{
+    public sealed class TilingManager : ITilingManager, IDisposable
+    {
+        private const double ResizeStep = 0.05;
+
+        private readonly ILogger<TilingManager> _logger;
+        private readonly Settings _settings;
+        private readonly IWindowManager _windowManager;
+        private readonly HiddenWindowJournal _journal;
+        private readonly WindowArranger _arranger;
+        private readonly WindowFilter _filter;
+        private readonly WinEventListener _listener = new WinEventListener();
+        private readonly FocusFollowsMouse _focusFollowsMouse;
+        private readonly WorkstationLockManager _lockManager;
+
+        private readonly List<MonitorState> _monitors = new List<MonitorState>();
+        private readonly Dictionary<IntPtr, ManagedWindow> _windows = new Dictionary<IntPtr, ManagedWindow>();
+        private readonly Dictionary<string, ScreenTagsViewModel> _viewModels = new Dictionary<string, ScreenTagsViewModel>();
+        private readonly HashSet<MonitorState> _dirty = new HashSet<MonitorState>();
+        private bool _layoutQueued;
+        private IntPtr _moveSizeHwnd;
+        private Dispatcher _dispatcher;
+
+        public bool IsEnabled { get; private set; }
+
+        public event EventHandler EnabledChanged;
+
+        public TilingManager(ILogger<TilingManager> logger, Settings settings, IWindowManager windowManager, HiddenWindowJournal journal, WorkstationLockManager lockManager)
+        {
+            _logger = logger;
+            _settings = settings;
+            _windowManager = windowManager;
+            _journal = journal;
+            _lockManager = lockManager;
+            _arranger = new WindowArranger(journal);
+            _filter = new WindowFilter(settings);
+            _focusFollowsMouse = new FocusFollowsMouse(settings, hwnd => _windows.ContainsKey(hwnd));
+
+            _listener.WindowEvent += Listener_WindowEvent;
+        }
+
+        public bool ShouldBeEnabled => _settings.EnableTiling && (EnvironmentHelper.IsAppRunningAsShell || _settings.EnableTilingOutsideShell);
+
+        #region Start and stop
+
+        /// <summary>
+        /// Called once at startup on the UI thread. Restores anything left over from a crash, then starts tiling
+        /// if it is enabled.
+        /// </summary>
+        public void Initialize()
+        {
+            _dispatcher = Dispatcher.CurrentDispatcher;
+
+            // recover from a previous crash before touching any window
+            _journal.RestoreAll();
+
+            _settings.PropertyChanged += Settings_PropertyChanged;
+            _windowManager.ScreensChanged += WindowManager_ScreensChanged;
+
+            if (ShouldBeEnabled)
+            {
+                Start();
+            }
+        }
+
+        private void Start()
+        {
+            if (IsEnabled)
+            {
+                return;
+            }
+
+            _logger.LogInformation("Starting tiling window manager");
+            _journal.RestoreAll();
+
+            BuildMonitors();
+
+            List<IntPtr> found = new List<IntPtr>();
+            User32.EnumWindows((hwnd, lParam) =>
+            {
+                found.Add(hwnd);
+                return true;
+            }, IntPtr.Zero);
+
+            // EnumWindows is in z-order, top first; insert bottom-up so the focused window ends up last
+            found.Reverse();
+            foreach (IntPtr hwnd in found)
+            {
+                TryManage(hwnd, focus: false);
+            }
+
+            IsEnabled = true;
+
+            IntPtr foreground = User32.GetForegroundWindow();
+            if (_windows.ContainsKey(foreground))
+            {
+                OnForeground(foreground);
+            }
+
+            _listener.Start();
+            _lockManager.Enable();
+            _focusFollowsMouse.Enable();
+
+            foreach (MonitorState monitor in _monitors)
+            {
+                MarkDirty(monitor);
+                monitor.ViewModel.IsActive = true;
+            }
+
+            EnabledChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void Stop()
+        {
+            if (!IsEnabled)
+            {
+                return;
+            }
+
+            _logger.LogInformation("Stopping tiling window manager");
+            IsEnabled = false;
+
+            _listener.Stop();
+            _focusFollowsMouse.Disable();
+            _lockManager.Disable();
+
+            foreach (ManagedWindow window in _windows.Values)
+            {
+                if (window.IsHiddenByUs)
+                {
+                    _arranger.Show(window.Hwnd);
+                }
+            }
+
+            _journal.RestoreAll();
+
+            foreach (MonitorState monitor in _monitors)
+            {
+                ClearViewModel(monitor.ViewModel);
+            }
+
+            _windows.Clear();
+            _monitors.Clear();
+            _dirty.Clear();
+
+            EnabledChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void UpdateEnabled()
+        {
+            if (ShouldBeEnabled)
+            {
+                Start();
+            }
+            else
+            {
+                Stop();
+            }
+        }
+
+        public void EmergencyRestore()
+        {
+            try
+            {
+                _focusFollowsMouse.Disable();
+            }
+            catch
+            {
+                // best effort; the journal restore below matters more
+            }
+
+            _journal.RestoreAll();
+        }
+
+        public void Dispose()
+        {
+            _settings.PropertyChanged -= Settings_PropertyChanged;
+            _windowManager.ScreensChanged -= WindowManager_ScreensChanged;
+            Stop();
+            _listener.Dispose();
+            _journal.RestoreAll();
+        }
+
+        #endregion
+
+        #region Monitors
+
+        private void BuildMonitors()
+        {
+            _monitors.Clear();
+            foreach (AppBarScreen screen in GetScreens())
+            {
+                _monitors.Add(new MonitorState(screen, GetOrCreateViewModel(screen.DeviceName)));
+            }
+        }
+
+        private List<AppBarScreen> GetScreens()
+        {
+            List<AppBarScreen> screens = _windowManager.ScreenState;
+            if (screens == null || screens.Count == 0)
+            {
+                screens = AppBarScreen.FromAllScreens();
+            }
+
+            return screens;
+        }
+
+        private MonitorState PrimaryMonitor => _monitors.FirstOrDefault(m => m.Screen.Primary) ?? _monitors.FirstOrDefault();
+
+        private MonitorState GetMonitorByHandle(IntPtr hmonitor)
+        {
+            return _monitors.FirstOrDefault(m => m.HMonitor == hmonitor);
+        }
+
+        private MonitorState GetMonitor(AppBarScreen screen)
+        {
+            return screen == null ? GetFocusedMonitor() : _monitors.FirstOrDefault(m => m.DeviceName == screen.DeviceName);
+        }
+
+        private MonitorState GetMonitorForWindow(IntPtr hwnd)
+        {
+            IntPtr hmonitor = User32.MonitorFromWindow(hwnd, User32.MONITOR_DEFAULTTONULL);
+            if (hmonitor == IntPtr.Zero)
+            {
+                // offscreen: use the monitor under the cursor
+                return GetCursorMonitor();
+            }
+
+            return GetMonitorByHandle(hmonitor) ?? GetCursorMonitor();
+        }
+
+        private MonitorState GetCursorMonitor()
+        {
+            if (User32.GetCursorPos(out User32.POINT point))
+            {
+                MonitorState monitor = GetMonitorByHandle(User32.MonitorFromPoint(point, User32.MONITOR_DEFAULTTONEAREST));
+                if (monitor != null)
+                {
+                    return monitor;
+                }
+            }
+
+            return PrimaryMonitor;
+        }
+
+        /// <summary>The monitor of the foreground window, falling back to the cursor's monitor.</summary>
+        private MonitorState GetFocusedMonitor()
+        {
+            IntPtr foreground = User32.GetForegroundWindow();
+            if (foreground != IntPtr.Zero)
+            {
+                if (_windows.TryGetValue(foreground, out ManagedWindow window))
+                {
+                    MonitorState owner = FindOwner(window.Hwnd);
+                    if (owner != null)
+                    {
+                        return owner;
+                    }
+                }
+
+                MonitorState monitor = GetMonitorByHandle(User32.MonitorFromWindow(foreground, User32.MONITOR_DEFAULTTONULL));
+                if (monitor != null)
+                {
+                    return monitor;
+                }
+            }
+
+            return GetCursorMonitor();
+        }
+
+        private MonitorState FindOwner(IntPtr hwnd)
+        {
+            long id = hwnd.ToInt64();
+            return _monitors.FirstOrDefault(m => m.TagSet.Contains(id));
+        }
+
+        /// <summary>Monitors ordered left to right, then top to bottom.</summary>
+        private List<MonitorState> OrderedMonitors()
+        {
+            return _monitors.OrderBy(m => m.Bounds.X).ThenBy(m => m.Bounds.Y).ToList();
+        }
+
+        private MonitorState CycleMonitor(MonitorState from, bool next)
+        {
+            List<MonitorState> ordered = OrderedMonitors();
+            if (ordered.Count < 2 || from == null)
+            {
+                return null;
+            }
+
+            int index = ordered.IndexOf(from);
+            index = (index + (next ? 1 : -1) + ordered.Count) % ordered.Count;
+            return ordered[index];
+        }
+
+        private MonitorState MonitorInDirection(MonitorState from, Direction direction)
+        {
+            (int cx, int cy) = from.Bounds.Center;
+            MonitorState best = null;
+            int bestDistance = int.MaxValue;
+
+            foreach (MonitorState monitor in _monitors)
+            {
+                if (monitor == from)
+                {
+                    continue;
+                }
+
+                RectI b = monitor.Bounds;
+                bool inDirection;
+                switch (direction)
+                {
+                    case Direction.Left: inDirection = b.Right <= from.Bounds.X && b.Y < from.Bounds.Bottom && from.Bounds.Y < b.Bottom; break;
+                    case Direction.Right: inDirection = b.X >= from.Bounds.Right && b.Y < from.Bounds.Bottom && from.Bounds.Y < b.Bottom; break;
+                    case Direction.Up: inDirection = b.Bottom <= from.Bounds.Y && b.X < from.Bounds.Right && from.Bounds.X < b.Right; break;
+                    default: inDirection = b.Y >= from.Bounds.Bottom && b.X < from.Bounds.Right && from.Bounds.X < b.Right; break;
+                }
+
+                if (!inDirection)
+                {
+                    continue;
+                }
+
+                (int mx, int my) = b.Center;
+                int distance = Math.Abs(mx - cx) + Math.Abs(my - cy);
+                if (distance < bestDistance)
+                {
+                    best = monitor;
+                    bestDistance = distance;
+                }
+            }
+
+            return best;
+        }
+
+        private void WindowManager_ScreensChanged(object sender, WindowManagerEventArgs e)
+        {
+            if (!IsEnabled)
+            {
+                return;
+            }
+
+            if (e.Reason == WindowManagerEventReason.WorkArea && !e.DisplaysChanged)
+            {
+                foreach (MonitorState monitor in _monitors)
+                {
+                    monitor.RefreshWorkArea();
+                    MarkDirty(monitor);
+                }
+
+                return;
+            }
+
+            ReconcileMonitors();
+        }
+
+        private void ReconcileMonitors()
+        {
+            List<AppBarScreen> screens = GetScreens();
+
+            foreach (AppBarScreen screen in screens)
+            {
+                MonitorState existing = _monitors.FirstOrDefault(m => m.DeviceName == screen.DeviceName);
+                if (existing != null)
+                {
+                    existing.SetScreen(screen);
+                }
+                else
+                {
+                    _logger.LogDebug($"Tiling: monitor added {screen.DeviceName}");
+                    MonitorState added = new MonitorState(screen, GetOrCreateViewModel(screen.DeviceName));
+                    added.ViewModel.IsActive = true;
+                    _monitors.Add(added);
+                }
+            }
+
+            foreach (MonitorState removed in _monitors.Where(m => screens.All(s => s.DeviceName != m.DeviceName)).ToList())
+            {
+                _logger.LogDebug($"Tiling: monitor removed {removed.DeviceName}");
+                _monitors.Remove(removed);
+                ClearViewModel(removed.ViewModel);
+
+                MonitorState primary = PrimaryMonitor;
+                if (primary == null)
+                {
+                    continue;
+                }
+
+                // move each tag's windows to the same tag on the primary monitor
+                foreach (Tag tag in removed.TagSet.Tags)
+                {
+                    foreach (long id in tag.AllWindows.ToList())
+                    {
+                        WindowState state = removed.TagSet.GetState(id) ?? WindowState.Tiled;
+                        removed.TagSet.RemoveWindow(id);
+                        primary.TagSet.AddWindow(id, tag.Index, state);
+                        SyncVisibility(primary, id);
+                    }
+                }
+            }
+
+            foreach (MonitorState monitor in _monitors)
+            {
+                MarkDirty(monitor);
+            }
+        }
+
+        #endregion
+
+        #region Window events
+
+        private void Listener_WindowEvent(object sender, WinEventArgs e)
+        {
+            if (!IsEnabled)
+            {
+                return;
+            }
+
+            switch (e.Kind)
+            {
+                case WinEventKind.Shown:
+                    OnShown(e.Hwnd);
+                    break;
+                case WinEventKind.Uncloaked:
+                    OnShown(e.Hwnd, ignoreExpected: true);
+                    break;
+                case WinEventKind.Hidden:
+                    OnHidden(e.Hwnd);
+                    break;
+                case WinEventKind.Cloaked:
+                case WinEventKind.Destroyed:
+                    Unmanage(e.Hwnd);
+                    break;
+                case WinEventKind.Foreground:
+                    OnForeground(e.Hwnd);
+                    break;
+                case WinEventKind.MoveSizeStart:
+                    _moveSizeHwnd = e.Hwnd;
+                    break;
+                case WinEventKind.MoveSizeEnd:
+                    _moveSizeHwnd = IntPtr.Zero;
+                    OnMoveSizeEnd(e.Hwnd);
+                    break;
+                case WinEventKind.MinimizeStart:
+                    OnMinimizeStart(e.Hwnd);
+                    break;
+                case WinEventKind.MinimizeEnd:
+                    OnMinimizeEnd(e.Hwnd);
+                    break;
+                case WinEventKind.NameChanged:
+                    OnNameChanged(e.Hwnd);
+                    break;
+                case WinEventKind.LocationChanged:
+                    OnLocationChanged(e.Hwnd);
+                    break;
+            }
+        }
+
+        private void OnShown(IntPtr hwnd, bool ignoreExpected = false)
+        {
+            if (!ignoreExpected && _arranger.ConsumeExpectedShow(hwnd))
+            {
+                return;
+            }
+
+            if (_windows.TryGetValue(hwnd, out ManagedWindow window))
+            {
+                if (window.IsHiddenByUs)
+                {
+                    // the app showed itself while its tag is hidden
+                    window.IsHiddenByUs = false;
+                    _journal.RemoveHidden(hwnd);
+                    HandleActivationOnHiddenTag(window);
+                }
+
+                return;
+            }
+
+            TryManage(hwnd, focus: true);
+        }
+
+        private void OnHidden(IntPtr hwnd)
+        {
+            if (_arranger.ConsumeExpectedHide(hwnd))
+            {
+                return;
+            }
+
+            if (!_windows.TryGetValue(hwnd, out ManagedWindow window) || window.IsHiddenByUs || User32.IsWindowVisible(hwnd))
+            {
+                return;
+            }
+
+            Unmanage(hwnd);
+        }
+
+        private void OnForeground(IntPtr hwnd)
+        {
+            if (!_windows.TryGetValue(hwnd, out ManagedWindow window))
+            {
+                return;
+            }
+
+            MonitorState monitor = FindOwner(hwnd);
+            if (monitor == null)
+            {
+                return;
+            }
+
+            int? tagIndex = monitor.TagSet.GetTagIndex(window.Id);
+            if (tagIndex.HasValue && tagIndex.Value != monitor.TagSet.SelectedIndex)
+            {
+                HandleActivationOnHiddenTag(window);
+                return;
+            }
+
+            monitor.TagSet.SetFocused(window.Id);
+            UpdateFocus(monitor);
+        }
+
+        /// <summary>
+        /// A window on a hidden tag activated itself: jump to its tag (awesome's urgent jump), or mark it urgent.
+        /// </summary>
+        private void HandleActivationOnHiddenTag(ManagedWindow window)
+        {
+            MonitorState monitor = FindOwner(window.Hwnd);
+            int? tagIndex = monitor?.TagSet.GetTagIndex(window.Id);
+            if (monitor == null || !tagIndex.HasValue || tagIndex.Value == monitor.TagSet.SelectedIndex)
+            {
+                return;
+            }
+
+            if (_settings.TilingFollowActivation)
+            {
+                monitor.TagSet.SetFocused(window.Id);
+                ViewTag(monitor, tagIndex.Value);
+            }
+            else
+            {
+                monitor.TagSet.Tags[tagIndex.Value].IsUrgent = true;
+                if (User32.IsWindowVisible(window.Hwnd))
+                {
+                    _arranger.Hide(window.Hwnd);
+                    window.IsHiddenByUs = true;
+                }
+
+                UpdateTags(monitor);
+            }
+        }
+
+        private void OnMinimizeStart(IntPtr hwnd)
+        {
+            if (!_windows.TryGetValue(hwnd, out ManagedWindow window))
+            {
+                return;
+            }
+
+            MonitorState monitor = FindOwner(hwnd);
+            if (monitor == null || monitor.TagSet.GetState(window.Id) == WindowState.Minimized)
+            {
+                return;
+            }
+
+            bool wasFocused = IsFocusedOnSelectedTag(monitor, window.Id);
+            long? next = wasFocused ? PickNextFocus(monitor, window.Id) : null;
+
+            monitor.TagSet.SetState(window.Id, WindowState.Minimized);
+            MarkDirty(monitor);
+
+            if (next.HasValue)
+            {
+                FocusId(monitor, next.Value);
+            }
+        }
+
+        private void OnMinimizeEnd(IntPtr hwnd)
+        {
+            if (!_windows.TryGetValue(hwnd, out ManagedWindow window))
+            {
+                return;
+            }
+
+            MonitorState monitor = FindOwner(hwnd);
+            if (monitor == null || monitor.TagSet.GetState(window.Id) != WindowState.Minimized)
+            {
+                return;
+            }
+
+            monitor.TagSet.SetState(window.Id, window.IsFloating ? WindowState.Floating : WindowState.Tiled);
+
+            if (monitor.TagSet.GetTagIndex(window.Id) != monitor.TagSet.SelectedIndex)
+            {
+                HandleActivationOnHiddenTag(window);
+            }
+
+            MarkDirty(monitor);
+        }
+
+        private void OnMoveSizeEnd(IntPtr hwnd)
+        {
+            if (!_windows.TryGetValue(hwnd, out ManagedWindow window))
+            {
+                return;
+            }
+
+            MonitorState monitor = FindOwner(hwnd);
+            if (monitor == null)
+            {
+                return;
+            }
+
+            RectI newRect = WindowArranger.GetVisibleRect(hwnd);
+            MonitorState cursorMonitor = GetCursorMonitor();
+
+            if (cursorMonitor != null && cursorMonitor != monitor)
+            {
+                // dropped on another screen: move it to that screen's selected tag
+                if (window.IsFloating)
+                {
+                    window.FloatingRect = newRect;
+                }
+
+                MoveWindowToMonitor(window, monitor, cursorMonitor, translateFloating: false);
+                return;
+            }
+
+            if (window.IsFloating)
+            {
+                window.FloatingRect = newRect;
+                return;
+            }
+
+            if (!monitor.TagSet.SelectedTag.Tree.Contains(window.Id) || !monitor.LastLayout.TryGetValue(window.Id, out RectI oldRect))
+            {
+                return;
+            }
+
+            const int tolerance = 4;
+            bool resized = Math.Abs(newRect.W - oldRect.W) > tolerance || Math.Abs(newRect.H - oldRect.H) > tolerance;
+
+            if (resized)
+            {
+                monitor.TagSet.SelectedTag.Tree.SetRatioFromRect(window.Id, newRect, monitor.WorkArea, _settings.TilingGap);
+            }
+            else if (User32.GetCursorPos(out User32.POINT point))
+            {
+                // dragged: swap with the window under the cursor
+                foreach (KeyValuePair<long, RectI> pair in monitor.LastLayout)
+                {
+                    if (pair.Key != window.Id && pair.Value.Contains(point.X, point.Y))
+                    {
+                        monitor.TagSet.SelectedTag.Tree.Swap(window.Id, pair.Key);
+                        break;
+                    }
+                }
+            }
+
+            MarkDirty(monitor);
+        }
+
+        private void OnNameChanged(IntPtr hwnd)
+        {
+            if (_windows.TryGetValue(hwnd, out ManagedWindow window))
+            {
+                window.RefreshTitle();
+                return;
+            }
+
+            // some windows get their title after they are shown
+            if (User32.IsWindowVisible(hwnd))
+            {
+                TryManage(hwnd, focus: false);
+            }
+        }
+
+        private void OnLocationChanged(IntPtr hwnd)
+        {
+            if (hwnd == _moveSizeHwnd || !_windows.TryGetValue(hwnd, out ManagedWindow window))
+            {
+                return;
+            }
+
+            MonitorState monitor = FindOwner(hwnd);
+            if (monitor == null)
+            {
+                return;
+            }
+
+            Tag tag = monitor.TagSet.GetTag(window.Id);
+            if (tag == null || monitor.TagSet.GetState(window.Id) == WindowState.Minimized)
+            {
+                return;
+            }
+
+            // games and video players that cover the monitor without a caption are left alone
+            bool coversMonitor = WindowArranger.GetVisibleRect(hwnd) == monitor.Bounds
+                && (User32.GetWindowLongPtr(hwnd, User32.GWL_STYLE) & User32.WS_CAPTION) != User32.WS_CAPTION;
+
+            if (coversMonitor && !window.IsAutoFullscreen && tag.FullscreenWindow == null)
+            {
+                window.IsAutoFullscreen = true;
+                tag.FullscreenWindow = window.Id;
+                MarkDirty(monitor);
+                return;
+            }
+
+            if (!coversMonitor && window.IsAutoFullscreen)
+            {
+                window.IsAutoFullscreen = false;
+                if (tag.FullscreenWindow == window.Id)
+                {
+                    tag.FullscreenWindow = null;
+                }
+
+                MarkDirty(monitor);
+                return;
+            }
+
+            // an app maximized itself: undo it unless it's the tag's fullscreen window
+            if (!window.IsFloating && tag.FullscreenWindow != window.Id && User32.IsZoomed(hwnd))
+            {
+                User32.ShowWindow(hwnd, User32.SW_RESTORE);
+                MarkDirty(monitor);
+            }
+        }
+
+        #endregion
+
+        #region Managing windows
+
+        private bool TryManage(IntPtr hwnd, bool focus)
+        {
+            if (_windows.ContainsKey(hwnd))
+            {
+                return false;
+            }
+
+            FilterResult result = _filter.ShouldManage(hwnd);
+            if (result == FilterResult.Ignore)
+            {
+                return false;
+            }
+
+            MonitorState monitor = GetMonitorForWindow(hwnd);
+            if (monitor == null)
+            {
+                return false;
+            }
+
+            ManagedWindow window = new ManagedWindow(hwnd)
+            {
+                IsFloating = result == FilterResult.Float,
+                HMonitor = monitor.HMonitor
+            };
+
+            if (window.IsFloating)
+            {
+                window.FloatingRect = WindowArranger.GetVisibleRect(hwnd);
+            }
+
+            WindowState state = User32.IsIconic(hwnd) ? WindowState.Minimized : window.IsFloating ? WindowState.Floating : WindowState.Tiled;
+
+            _windows[hwnd] = window;
+            monitor.TagSet.AddWindow(window.Id, monitor.TagSet.SelectedIndex, state);
+            _logger.LogDebug($"Tiling: managing {window} as {state} on {monitor.DeviceName}");
+
+            if (focus && state != WindowState.Minimized)
+            {
+                monitor.TagSet.SetFocused(window.Id);
+                if (User32.GetForegroundWindow() != hwnd)
+                {
+                    WindowArranger.Focus(hwnd, raise: true);
+                }
+            }
+
+            MarkDirty(monitor);
+            return true;
+        }
+
+        private void Unmanage(IntPtr hwnd)
+        {
+            if (!_windows.TryGetValue(hwnd, out ManagedWindow window))
+            {
+                return;
+            }
+
+            MonitorState monitor = FindOwner(hwnd);
+            long? next = null;
+            if (monitor != null && IsFocusedOnSelectedTag(monitor, window.Id))
+            {
+                next = PickNextFocus(monitor, window.Id);
+            }
+
+            monitor?.TagSet.RemoveWindow(window.Id);
+            _windows.Remove(hwnd);
+            _arranger.Forget(hwnd);
+            WindowIconHelper.Forget(hwnd);
+            _logger.LogDebug($"Tiling: no longer managing {window}");
+
+            if (monitor != null)
+            {
+                MarkDirty(monitor);
+                if (next.HasValue)
+                {
+                    FocusId(monitor, next.Value);
+                }
+            }
+        }
+
+        /// <summary>Hides or shows a window to match whether its tag is selected.</summary>
+        private void SyncVisibility(MonitorState monitor, long id)
+        {
+            IntPtr hwnd = new IntPtr(id);
+            if (!_windows.TryGetValue(hwnd, out ManagedWindow window))
+            {
+                return;
+            }
+
+            bool visible = monitor.TagSet.GetTagIndex(id) == monitor.TagSet.SelectedIndex
+                || monitor.TagSet.GetState(id) == WindowState.Minimized;
+
+            if (visible && window.IsHiddenByUs)
+            {
+                window.IsHiddenByUs = false;
+                _arranger.Show(hwnd);
+            }
+            else if (!visible && !window.IsHiddenByUs)
+            {
+                window.IsHiddenByUs = true;
+                _arranger.Hide(hwnd);
+            }
+        }
+
+        private void MoveWindowToMonitor(ManagedWindow window, MonitorState from, MonitorState to, bool translateFloating)
+        {
+            WindowState state = from.TagSet.GetState(window.Id) ?? WindowState.Tiled;
+            from.TagSet.RemoveWindow(window.Id);
+            to.TagSet.AddWindow(window.Id, to.TagSet.SelectedIndex, state);
+            to.TagSet.SetFocused(window.Id);
+            window.HMonitor = to.HMonitor;
+
+            if (translateFloating && window.IsFloating && window.FloatingRect.HasValue)
+            {
+                RectI r = window.FloatingRect.Value;
+                RectI moved = new RectI(r.X - from.WorkArea.X + to.WorkArea.X, r.Y - from.WorkArea.Y + to.WorkArea.Y, r.W, r.H);
+                window.FloatingRect = moved;
+                WindowArranger.MoveTo(window.Hwnd, moved);
+            }
+
+            SyncVisibility(to, window.Id);
+            MarkDirty(from);
+            MarkDirty(to);
+            WindowArranger.Focus(window.Hwnd);
+        }
+
+        #endregion
+
+        #region Focus helpers
+
+        private ManagedWindow GetFocusedWindow()
+        {
+            IntPtr foreground = User32.GetForegroundWindow();
+            if (_windows.TryGetValue(foreground, out ManagedWindow window))
+            {
+                return window;
+            }
+
+            MonitorState monitor = GetFocusedMonitor();
+            long? focused = monitor?.TagSet.SelectedTag.FocusedWindow;
+            if (focused.HasValue && _windows.TryGetValue(new IntPtr(focused.Value), out window))
+            {
+                return window;
+            }
+
+            return null;
+        }
+
+        private bool IsFocusedOnSelectedTag(MonitorState monitor, long id)
+        {
+            return monitor.TagSet.SelectedTag.FocusedWindow == id || User32.GetForegroundWindow().ToInt64() == id;
+        }
+
+        /// <summary>The window to focus after <paramref name="leaving"/> goes away from the selected tag.</summary>
+        private static long? PickNextFocus(MonitorState monitor, long leaving)
+        {
+            Tag tag = monitor.TagSet.SelectedTag;
+            List<long> visible = tag.VisibleWindows.ToList();
+            int index = visible.IndexOf(leaving);
+            visible.Remove(leaving);
+            if (visible.Count == 0)
+            {
+                return null;
+            }
+
+            return visible[Math.Max(0, Math.Min(index, visible.Count - 1))];
+        }
+
+        private void FocusId(MonitorState monitor, long id)
+        {
+            monitor.TagSet.SetFocused(id);
+            WindowArranger.Focus(new IntPtr(id));
+            UpdateFocus(monitor);
+        }
+
+        /// <summary>Focuses the tag's last-focused window, or its first window.</summary>
+        private void FocusTag(MonitorState monitor)
+        {
+            Tag tag = monitor.TagSet.SelectedTag;
+            long? target = tag.FocusedWindow;
+            if (!target.HasValue || !tag.VisibleWindows.Contains(target.Value))
+            {
+                target = tag.VisibleWindows.Cast<long?>().FirstOrDefault();
+            }
+
+            if (target.HasValue)
+            {
+                FocusId(monitor, target.Value);
+            }
+            else
+            {
+                UpdateFocus(monitor);
+            }
+        }
+
+        private static void WarpCursor(MonitorState monitor)
+        {
+            (int x, int y) = monitor.WorkArea.Center;
+            System.Windows.Forms.Cursor.Position = new System.Drawing.Point(x, y);
+        }
+
+        #endregion
+
+        #region Layout
+
+        private void MarkDirty(MonitorState monitor)
+        {
+            if (monitor == null)
+            {
+                return;
+            }
+
+            _dirty.Add(monitor);
+            if (!_layoutQueued)
+            {
+                _layoutQueued = true;
+                (_dispatcher ?? Dispatcher.CurrentDispatcher).BeginInvoke(DispatcherPriority.Background, new Action(ProcessLayouts));
+            }
+        }
+
+        private void ProcessLayouts()
+        {
+            _layoutQueued = false;
+            if (!IsEnabled)
+            {
+                _dirty.Clear();
+                return;
+            }
+
+            List<MonitorState> dirty = _dirty.ToList();
+            _dirty.Clear();
+            foreach (MonitorState monitor in dirty)
+            {
+                if (_monitors.Contains(monitor))
+                {
+                    Layout(monitor);
+                }
+            }
+        }
+
+        private void Layout(MonitorState monitor)
+        {
+            monitor.RefreshWorkArea();
+
+            Tag tag = monitor.TagSet.SelectedTag;
+            Dictionary<long, RectI> layout = tag.Tree.Layout(monitor.WorkArea, _settings.TilingGap);
+            monitor.LastLayout = layout;
+
+            List<(IntPtr, RectI)> placements = new List<(IntPtr, RectI)>();
+            foreach (KeyValuePair<long, RectI> pair in layout)
+            {
+                if (pair.Key == tag.FullscreenWindow)
+                {
+                    continue;
+                }
+
+                placements.Add((new IntPtr(pair.Key), pair.Value));
+            }
+
+            ManagedWindow fullscreen = null;
+            if (tag.FullscreenWindow.HasValue && _windows.TryGetValue(new IntPtr(tag.FullscreenWindow.Value), out fullscreen) && !fullscreen.IsAutoFullscreen)
+            {
+                placements.Add((fullscreen.Hwnd, monitor.Bounds));
+            }
+
+            List<IntPtr> denied = _arranger.Apply(placements);
+            foreach (IntPtr hwnd in denied)
+            {
+                if (_windows.TryGetValue(hwnd, out ManagedWindow window) && !window.IsInaccessible)
+                {
+                    _logger.LogInformation($"Tiling: {window} can't be moved (probably elevated); floating it");
+                    window.IsInaccessible = true;
+                    window.IsFloating = true;
+                    window.FloatingRect = WindowArranger.GetVisibleRect(hwnd);
+                    monitor.TagSet.SetState(window.Id, WindowState.Floating);
+                    MarkDirty(monitor);
+                }
+            }
+
+            if (fullscreen != null && !fullscreen.IsAutoFullscreen)
+            {
+                User32.SetWindowPos(fullscreen.Hwnd, User32.HWND_TOP, 0, 0, 0, 0, User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
+            }
+
+            UpdateViewModel(monitor);
+        }
+
+        #endregion
+
+        #region View models
+
+        public ScreenTagsViewModel GetScreenModel(AppBarScreen screen)
+        {
+            if (screen == null)
+            {
+                return null;
+            }
+
+            ScreenTagsViewModel model = GetOrCreateViewModel(screen.DeviceName);
+            MonitorState monitor = _monitors.FirstOrDefault(m => m.DeviceName == screen.DeviceName);
+            if (monitor != null)
+            {
+                UpdateViewModel(monitor);
+            }
+
+            return model;
+        }
+
+        private ScreenTagsViewModel GetOrCreateViewModel(string deviceName)
+        {
+            if (_viewModels.TryGetValue(deviceName, out ScreenTagsViewModel model))
+            {
+                return model;
+            }
+
+            model = new ScreenTagsViewModel(deviceName, next =>
+            {
+                MonitorState monitor = _monitors.FirstOrDefault(m => m.DeviceName == deviceName);
+                if (monitor != null)
+                {
+                    int count = monitor.TagSet.Tags.Count;
+                    ViewTag(monitor, (monitor.TagSet.SelectedIndex + (next ? 1 : -1) + count) % count);
+                }
+            });
+
+            for (int i = 0; i < TagSet.DefaultTagCount; i++)
+            {
+                model.Tags.Add(new TagViewModel(i, TagSet.DefaultLabel(i),
+                    index => ViewTag(_monitors.FirstOrDefault(m => m.DeviceName == deviceName), index),
+                    index => MoveFocusedToTag(_monitors.FirstOrDefault(m => m.DeviceName == deviceName), index)));
+            }
+
+            _viewModels[deviceName] = model;
+            return model;
+        }
+
+        private void ClearViewModel(ScreenTagsViewModel model)
+        {
+            model.IsActive = false;
+            model.FocusedWindow = null;
+            foreach (ManagedWindowViewModel item in model.Windows)
+            {
+                item.Detach();
+            }
+
+            model.Windows.Clear();
+            foreach (TagViewModel tag in model.Tags)
+            {
+                tag.IsSelected = false;
+                tag.IsOccupied = false;
+                tag.IsUrgent = false;
+            }
+        }
+
+        private void UpdateViewModel(MonitorState monitor)
+        {
+            UpdateTags(monitor);
+
+            ScreenTagsViewModel model = monitor.ViewModel;
+            List<long> visible = monitor.TagSet.SelectedTag.VisibleWindows.Where(id => _windows.ContainsKey(new IntPtr(id))).ToList();
+
+            // keep existing items so icons and bindings survive
+            for (int i = model.Windows.Count - 1; i >= 0; i--)
+            {
+                if (!visible.Contains(model.Windows[i].Window.Id))
+                {
+                    model.Windows[i].Detach();
+                    model.Windows.RemoveAt(i);
+                }
+            }
+
+            for (int i = 0; i < visible.Count; i++)
+            {
+                ManagedWindow window = _windows[new IntPtr(visible[i])];
+                int existing = -1;
+                for (int j = 0; j < model.Windows.Count; j++)
+                {
+                    if (model.Windows[j].Window == window)
+                    {
+                        existing = j;
+                        break;
+                    }
+                }
+
+                if (existing < 0)
+                {
+                    model.Windows.Insert(i, new ManagedWindowViewModel(window, this));
+                }
+                else if (existing != i)
+                {
+                    model.Windows.Move(existing, i);
+                }
+
+                model.Windows[i].IsFloating = window.IsFloating;
+            }
+
+            UpdateFocus(monitor);
+        }
+
+        private void UpdateTags(MonitorState monitor)
+        {
+            ScreenTagsViewModel model = monitor.ViewModel;
+            for (int i = 0; i < model.Tags.Count && i < monitor.TagSet.Tags.Count; i++)
+            {
+                Tag tag = monitor.TagSet.Tags[i];
+                model.Tags[i].Label = tag.Label;
+                model.Tags[i].IsSelected = i == monitor.TagSet.SelectedIndex;
+                model.Tags[i].IsOccupied = !tag.IsEmpty;
+                model.Tags[i].IsUrgent = tag.IsUrgent;
+            }
+        }
+
+        private void UpdateFocus(MonitorState monitor)
+        {
+            long? focused = monitor.TagSet.SelectedTag.FocusedWindow;
+            monitor.ViewModel.FocusedWindow = focused.HasValue ? monitor.ViewModel.Windows.FirstOrDefault(w => w.Window.Id == focused.Value) : null;
+        }
+
+        #endregion
+
+        #region Public API
+
+        public void ViewTag(AppBarScreen screen, int index)
+        {
+            ViewTag(GetMonitor(screen), index);
+        }
+
+        private void ViewTag(MonitorState monitor, int index)
+        {
+            if (!IsEnabled || monitor == null || index < 0 || index >= monitor.TagSet.Tags.Count || index == monitor.TagSet.SelectedIndex)
+            {
+                return;
+            }
+
+            TagViewDelta delta = monitor.TagSet.View(index);
+
+            // position the new tag's windows while they are still hidden, then swap
+            Layout(monitor);
+
+            foreach (long id in delta.ToShow)
+            {
+                if (_windows.TryGetValue(new IntPtr(id), out ManagedWindow window) && window.IsHiddenByUs)
+                {
+                    window.IsHiddenByUs = false;
+                    _arranger.Show(window.Hwnd);
+                }
+            }
+
+            foreach (long id in delta.ToHide)
+            {
+                if (_windows.TryGetValue(new IntPtr(id), out ManagedWindow window) && !window.IsHiddenByUs)
+                {
+                    window.IsHiddenByUs = true;
+                    _arranger.Hide(window.Hwnd);
+                }
+            }
+
+            FocusTag(monitor);
+            UpdateViewModel(monitor);
+        }
+
+        public void ViewPreviousTag(AppBarScreen screen)
+        {
+            MonitorState monitor = GetMonitor(screen);
+            if (monitor != null)
+            {
+                ViewTag(monitor, monitor.TagSet.PreviousIndex);
+            }
+        }
+
+        public void MoveFocusedToTag(int index)
+        {
+            ManagedWindow window = GetFocusedWindow();
+            if (window != null)
+            {
+                MoveWindowToTag(window, index);
+            }
+        }
+
+        private void MoveFocusedToTag(MonitorState monitor, int index)
+        {
+            // from a tag bar right-click: the focused window of that screen
+            long? focused = monitor?.TagSet.SelectedTag.FocusedWindow;
+            if (focused.HasValue && _windows.TryGetValue(new IntPtr(focused.Value), out ManagedWindow window))
+            {
+                MoveWindowToTag(window, index);
+            }
+        }
+
+        public void MoveWindowToTag(IntPtr hwnd, int index)
+        {
+            if (_windows.TryGetValue(hwnd, out ManagedWindow window))
+            {
+                MoveWindowToTag(window, index);
+            }
+        }
+
+        private void MoveWindowToTag(ManagedWindow window, int index)
+        {
+            MonitorState monitor = FindOwner(window.Hwnd);
+            if (!IsEnabled || monitor == null || index < 0 || index >= monitor.TagSet.Tags.Count)
+            {
+                return;
+            }
+
+            bool wasFocused = IsFocusedOnSelectedTag(monitor, window.Id);
+            long? next = wasFocused ? PickNextFocus(monitor, window.Id) : null;
+
+            if (!monitor.TagSet.MoveWindow(window.Id, index))
+            {
+                return;
+            }
+
+            SyncVisibility(monitor, window.Id);
+            MarkDirty(monitor);
+
+            // focus stays on the current tag
+            if (next.HasValue)
+            {
+                FocusId(monitor, next.Value);
+            }
+
+            UpdateViewModel(monitor);
+        }
+
+        public void MoveFocusedToScreen(bool next)
+        {
+            ManagedWindow window = GetFocusedWindow();
+            MonitorState from = window != null ? FindOwner(window.Hwnd) : null;
+            MonitorState to = CycleMonitor(from, next);
+            if (!IsEnabled || window == null || to == null)
+            {
+                return;
+            }
+
+            MoveWindowToMonitor(window, from, to, translateFloating: true);
+        }
+
+        public void FocusDirection(Direction direction)
+        {
+            if (!IsEnabled)
+            {
+                return;
+            }
+
+            ManagedWindow window = GetFocusedWindow();
+            MonitorState monitor = window != null ? FindOwner(window.Hwnd) : GetFocusedMonitor();
+            if (monitor == null)
+            {
+                return;
+            }
+
+            if (window != null && monitor.TagSet.SelectedTag.Tree.Contains(window.Id))
+            {
+                long? neighbor = BspTree.FindNeighbor(window.Id, direction, monitor.LastLayout);
+                if (neighbor.HasValue)
+                {
+                    FocusId(monitor, neighbor.Value);
+                    return;
+                }
+            }
+            else if (window == null || window.IsFloating)
+            {
+                FocusTag(monitor);
+                return;
+            }
+
+            // nothing in that direction on this screen: try the next screen over
+            MonitorState other = MonitorInDirection(monitor, direction);
+            if (other != null)
+            {
+                FocusTag(other);
+                WarpCursor(other);
+            }
+        }
+
+        public void FocusNext()
+        {
+            CycleFocus(1);
+        }
+
+        public void FocusPrev()
+        {
+            CycleFocus(-1);
+        }
+
+        private void CycleFocus(int step)
+        {
+            if (!IsEnabled)
+            {
+                return;
+            }
+
+            ManagedWindow window = GetFocusedWindow();
+            MonitorState monitor = window != null ? FindOwner(window.Hwnd) : GetFocusedMonitor();
+            if (monitor == null)
+            {
+                return;
+            }
+
+            List<long> visible = monitor.TagSet.SelectedTag.VisibleWindows.ToList();
+            if (visible.Count == 0)
+            {
+                return;
+            }
+
+            int index = window != null ? visible.IndexOf(window.Id) : -1;
+            index = index < 0 ? 0 : (index + step + visible.Count) % visible.Count;
+            FocusId(monitor, visible[index]);
+        }
+
+        public void FocusScreen(bool next)
+        {
+            MonitorState to = CycleMonitor(GetFocusedMonitor(), next);
+            if (!IsEnabled || to == null)
+            {
+                return;
+            }
+
+            FocusTag(to);
+            WarpCursor(to);
+        }
+
+        public void SwapDirection(Direction direction)
+        {
+            WithFocusedTiled((monitor, window, tree) =>
+            {
+                long? neighbor = BspTree.FindNeighbor(window.Id, direction, monitor.LastLayout);
+                return neighbor.HasValue && tree.Swap(window.Id, neighbor.Value);
+            });
+        }
+
+        public void MoveDirection(Direction direction)
+        {
+            WithFocusedTiled((monitor, window, tree) => tree.Move(window.Id, direction, monitor.WorkArea, _settings.TilingGap));
+        }
+
+        public void Resize(Direction direction)
+        {
+            WithFocusedTiled((monitor, window, tree) => tree.Resize(window.Id, direction, ResizeStep));
+        }
+
+        public void ToggleOrientation()
+        {
+            WithFocusedTiled((monitor, window, tree) => tree.ToggleOrientation(window.Id));
+        }
+
+        private void WithFocusedTiled(Func<MonitorState, ManagedWindow, BspTree, bool> action)
+        {
+            if (!IsEnabled)
+            {
+                return;
+            }
+
+            ManagedWindow window = GetFocusedWindow();
+            MonitorState monitor = window != null ? FindOwner(window.Hwnd) : null;
+            if (monitor == null)
+            {
+                return;
+            }
+
+            BspTree tree = monitor.TagSet.SelectedTag.Tree;
+            if (!tree.Contains(window.Id))
+            {
+                return;
+            }
+
+            if (action(monitor, window, tree))
+            {
+                MarkDirty(monitor);
+            }
+        }
+
+        public void Equalize()
+        {
+            MonitorState monitor = GetFocusedMonitor();
+            if (!IsEnabled || monitor == null)
+            {
+                return;
+            }
+
+            monitor.TagSet.SelectedTag.Tree.Equalize();
+            MarkDirty(monitor);
+        }
+
+        public void ToggleFloating()
+        {
+            ManagedWindow window = GetFocusedWindow();
+            if (window != null)
+            {
+                ToggleFloating(window.Hwnd);
+            }
+        }
+
+        public void ToggleFloating(IntPtr hwnd)
+        {
+            if (!IsEnabled || !_windows.TryGetValue(hwnd, out ManagedWindow window))
+            {
+                return;
+            }
+
+            MonitorState monitor = FindOwner(hwnd);
+            if (monitor == null || monitor.TagSet.GetState(window.Id) == WindowState.Minimized)
+            {
+                return;
+            }
+
+            if (window.IsFloating)
+            {
+                if (window.IsInaccessible)
+                {
+                    return;
+                }
+
+                window.FloatingRect = WindowArranger.GetVisibleRect(hwnd);
+                window.IsFloating = false;
+                monitor.TagSet.SetState(window.Id, WindowState.Tiled);
+            }
+            else
+            {
+                window.IsFloating = true;
+                monitor.TagSet.SetState(window.Id, WindowState.Floating);
+
+                RectI rect = window.FloatingRect ?? DefaultFloatingRect(monitor);
+                if (!rect.Intersects(monitor.WorkArea))
+                {
+                    rect = DefaultFloatingRect(monitor);
+                }
+
+                WindowArranger.MoveTo(hwnd, rect);
+                User32.SetWindowPos(hwnd, User32.HWND_TOP, 0, 0, 0, 0, User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
+            }
+
+            MarkDirty(monitor);
+        }
+
+        private static RectI DefaultFloatingRect(MonitorState monitor)
+        {
+            RectI area = monitor.WorkArea;
+            int w = area.W * 3 / 5;
+            int h = area.H * 3 / 5;
+            return new RectI(area.X + (area.W - w) / 2, area.Y + (area.H - h) / 2, w, h);
+        }
+
+        public void ToggleFullscreen()
+        {
+            ManagedWindow window = GetFocusedWindow();
+            MonitorState monitor = window != null ? FindOwner(window.Hwnd) : null;
+            if (!IsEnabled || monitor == null)
+            {
+                return;
+            }
+
+            Tag tag = monitor.TagSet.SelectedTag;
+            if (tag.FullscreenWindow == window.Id)
+            {
+                tag.FullscreenWindow = null;
+                if (window.IsFloating && window.FloatingRect.HasValue)
+                {
+                    WindowArranger.MoveTo(window.Hwnd, window.FloatingRect.Value);
+                }
+            }
+            else
+            {
+                if (window.IsFloating)
+                {
+                    window.FloatingRect = WindowArranger.GetVisibleRect(window.Hwnd);
+                }
+
+                window.IsAutoFullscreen = false;
+                tag.FullscreenWindow = window.Id;
+            }
+
+            MarkDirty(monitor);
+        }
+
+        public void CloseFocused()
+        {
+            ManagedWindow window = GetFocusedWindow();
+            if (window != null)
+            {
+                CloseWindow(window.Hwnd);
+            }
+        }
+
+        public void CloseWindow(IntPtr hwnd)
+        {
+            User32.PostMessage(hwnd, User32.WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
+        }
+
+        public void FocusWindow(IntPtr hwnd)
+        {
+            if (!_windows.TryGetValue(hwnd, out ManagedWindow window))
+            {
+                WindowArranger.Focus(hwnd);
+                return;
+            }
+
+            MonitorState monitor = FindOwner(hwnd);
+            if (monitor == null)
+            {
+                return;
+            }
+
+            int? tagIndex = monitor.TagSet.GetTagIndex(window.Id);
+            monitor.TagSet.SetFocused(window.Id);
+            if (tagIndex.HasValue && tagIndex.Value != monitor.TagSet.SelectedIndex)
+            {
+                ViewTag(monitor, tagIndex.Value);
+                return;
+            }
+
+            FocusId(monitor, window.Id);
+        }
+
+        #endregion
+
+        private void Settings_PropertyChanged(object sender, PropertyChangedEventArgs e)
+        {
+            switch (e.PropertyName)
+            {
+                case nameof(Settings.EnableTiling):
+                case nameof(Settings.EnableTilingOutsideShell):
+                    UpdateEnabled();
+                    break;
+                case nameof(Settings.TilingGap):
+                    foreach (MonitorState monitor in _monitors)
+                    {
+                        MarkDirty(monitor);
+                    }
+                    break;
+                case nameof(Settings.EnableFocusFollowsMouse):
+                case nameof(Settings.FocusFollowsMouseRaise):
+                case nameof(Settings.FocusFollowsMouseDelayMs):
+                case nameof(Settings.FocusFollowsMouseMode):
+                    if (IsEnabled)
+                    {
+                        _focusFollowsMouse.Enable();
+                    }
+                    break;
+                case nameof(Settings.RemapWinL):
+                    if (IsEnabled)
+                    {
+                        if (_settings.RemapWinL)
+                        {
+                            _lockManager.Enable();
+                        }
+                        else
+                        {
+                            _lockManager.Disable();
+                        }
+                    }
+                    break;
+            }
+        }
+    }
+}

@@ -16,6 +16,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using CairoDesktop.Infrastructure.Options;
 using CairoDesktop.Infrastructure.Services;
+using CairoDesktop.Tiling;
 using ManagedShell.Common.SupportingClasses; // Required for StartupRunner; excluded from debug builds
 using Microsoft.Extensions.Options; // Required for StartupRunner; excluded from debug builds
 
@@ -59,6 +60,9 @@ namespace CairoDesktop
 
         protected override void OnStartup(StartupEventArgs e)
         {
+            // windows hidden on other tags must come back even if we crash
+            AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
+
             // Initialize current shell information here, since it won't be accurate if we wait until after we create our own windows
             _initializationService.SetIsCairoRunningAsShell();
 
@@ -119,6 +123,8 @@ namespace CairoDesktop
                 e.ApplicationExitCode = 1;
             }
 
+            RestoreTiledWindows();
+
             base.OnExit(e);
 
             await GracefullyExit();
@@ -135,8 +141,30 @@ namespace CairoDesktop
 
         private bool _errorVisible;
 
+        /// <summary>
+        /// Shows windows the tiling manager hid and restores the lock policy. Safe from any thread.
+        /// </summary>
+        private void RestoreTiledWindows()
+        {
+            try
+            {
+                Host?.Services.GetService<ITilingManager>()?.EmergencyRestore();
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError($"Unable to restore tiled windows: {ex.Message}");
+            }
+        }
+
+        private void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
+        {
+            RestoreTiledWindows();
+        }
+
         private void Application_DispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
         {
+            // tiled windows are restored on the restart and exit paths below; if Cairo keeps running they stay put
+
             Assembly assembly = Assembly.GetExecutingAssembly();
             FileVersionInfo fvi = FileVersionInfo.GetVersionInfo(assembly.Location);
             string version = fvi.FileVersion;
@@ -165,6 +193,7 @@ namespace CairoDesktop
                     // Automatically restart for known render thread failure messages.
                     if (e.Exception.Message.StartsWith("UCEERR_RENDERTHREADFAILURE"))
                     {
+                        RestoreTiledWindows();
                         RestartCairo();
                         Environment.FailFast("Automatically restarted Cairo due to a render thread failure.");
                     }
@@ -173,6 +202,7 @@ namespace CairoDesktop
                         if (MessageBox.Show(dMsg, "Cairo Desktop Error", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
                         {
                             // it's like getting a morning coffee.
+                            RestoreTiledWindows();
                             RestartCairo();
                             Environment.FailFast("User restarted Cairo due to an exception.");
                         }
@@ -184,6 +214,7 @@ namespace CairoDesktop
             catch
             {
                 // If this fails we're probably up the creek. Abandon ship!
+                RestoreTiledWindows();
                 ExitCairo();
             }
 

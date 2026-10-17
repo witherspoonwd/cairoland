@@ -34,6 +34,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CairoDesktop.Tiling.Core", 
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CairoDesktop.Tiling.Core.Tests", "Tests\CairoDesktop.Tiling.Core.Tests\CairoDesktop.Tiling.Core.Tests.csproj", "{829A9FD6-F31E-4230-84EA-272567DA6D4C}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CairoDesktop.Tiling", "CairoDesktop.Tiling\CairoDesktop.Tiling.csproj", "{74979AA7-1760-4E8D-AE9D-62EF702B1DB5}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|ARM64 = Debug|ARM64
@@ -182,6 +184,18 @@ Global
 		{829A9FD6-F31E-4230-84EA-272567DA6D4C}.Release|x64.Build.0 = Release|x64
 		{829A9FD6-F31E-4230-84EA-272567DA6D4C}.Release|x86.ActiveCfg = Release|Any CPU
 		{829A9FD6-F31E-4230-84EA-272567DA6D4C}.Release|x86.Build.0 = Release|Any CPU
+		{74979AA7-1760-4E8D-AE9D-62EF702B1DB5}.Debug|ARM64.ActiveCfg = Debug|ARM64
+		{74979AA7-1760-4E8D-AE9D-62EF702B1DB5}.Debug|ARM64.Build.0 = Debug|ARM64
+		{74979AA7-1760-4E8D-AE9D-62EF702B1DB5}.Debug|x64.ActiveCfg = Debug|x64
+		{74979AA7-1760-4E8D-AE9D-62EF702B1DB5}.Debug|x64.Build.0 = Debug|x64
+		{74979AA7-1760-4E8D-AE9D-62EF702B1DB5}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{74979AA7-1760-4E8D-AE9D-62EF702B1DB5}.Debug|x86.Build.0 = Debug|Any CPU
+		{74979AA7-1760-4E8D-AE9D-62EF702B1DB5}.Release|ARM64.ActiveCfg = Release|ARM64
+		{74979AA7-1760-4E8D-AE9D-62EF702B1DB5}.Release|ARM64.Build.0 = Release|ARM64
+		{74979AA7-1760-4E8D-AE9D-62EF702B1DB5}.Release|x64.ActiveCfg = Release|x64
+		{74979AA7-1760-4E8D-AE9D-62EF702B1DB5}.Release|x64.Build.0 = Release|x64
+		{74979AA7-1760-4E8D-AE9D-62EF702B1DB5}.Release|x86.ActiveCfg = Release|Any CPU
+		{74979AA7-1760-4E8D-AE9D-62EF702B1DB5}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -199,6 +213,7 @@ Global
 		{DCA40DE6-E599-45C4-9849-15FC9B3F5F6C} = {26E388A8-20C6-46E2-964B-2DF4BB42AD60}
 		{9F34A5D0-A6A9-4B0B-9CEF-D6C573444A32} = {26E388A8-20C6-46E2-964B-2DF4BB42AD60}
 		{829A9FD6-F31E-4230-84EA-272567DA6D4C} = {3B76D43E-0699-4F7E-8FC9-20DE83A05543}
+		{74979AA7-1760-4E8D-AE9D-62EF702B1DB5} = {26E388A8-20C6-46E2-964B-2DF4BB42AD60}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {7566EAA4-435C-4795-BB55-54BA364D0419}

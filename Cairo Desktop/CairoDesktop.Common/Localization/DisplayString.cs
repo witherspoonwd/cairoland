@@ -630,5 +630,107 @@ namespace CairoDesktop.Common.Localization
         public static string sCommand_ToggleCalendar => getString();
 
         public static string sCommand_ToggleSearch => getString();
+
+        public static string sCommand_TilingViewTag => getString();
+
+        public static string sCommand_TilingMoveToTag => getString();
+
+        public static string sCommand_TilingViewPreviousTag => getString();
+
+        public static string sCommand_TilingFocusDirection => getString();
+
+        public static string sCommand_TilingSwapDirection => getString();
+
+        public static string sCommand_TilingMoveDirection => getString();
+
+        public static string sCommand_TilingResize => getString();
+
+        public static string sCommand_TilingFocusNext => getString();
+
+        public static string sCommand_TilingFocusPrev => getString();
+
+        public static string sCommand_TilingToggleOrientation => getString();
+
+        public static string sCommand_TilingEqualize => getString();
+
+        public static string sCommand_TilingToggleFloating => getString();
+
+        public static string sCommand_TilingToggleFullscreen => getString();
+
+        public static string sCommand_TilingCloseWindow => getString();
+
+        public static string sCommand_TilingFocusScreen => getString();
+
+        public static string sCommand_TilingMoveToScreen => getString();
+
+        public static string sCommand_TilingLaunchTerminal => getString();
+
+        public static string sCommand_ToggleProgramLauncher => getString();
+
+        public static string sCommand_DisplayProjection => getString();
+
+        public static string sCommand_RestartCairo => getString();
+
+        public static string sWindowManager => getString();
+
+        public static string sWindowManager_EnableTiling => getString();
+
+        public static string sWindowManager_FocusFollowsMouse => getString();
+
+        public static string sWindowManager_RaiseOnFocus => getString();
+
+        public static string sWindowManager_FollowActivation => getString();
+
+        public static string sWindowManager_Gaps => getString();
+
+        public static string sWindowManager_Settings => getString();
+
+        public static string sWindowManager_MoveToTag => getString();
+
+        public static string sWindowManager_Float => getString();
+
+        public static string sSettings_Tiling => getString();
+
+        public static string sSettings_Tiling_EnableTiling => getString();
+
+        public static string sSettings_Tiling_EnableTilingOutsideShell => getString();
+
+        public static string sSettings_Tiling_Gap => getString();
+
+        public static string sSettings_Tiling_FollowActivation => getString();
+
+        public static string sSettings_Tiling_Modifier => getString();
+
+        public static string sSettings_Tiling_TerminalCommand => getString();
+
+        public static string sSettings_Tiling_FloatClasses => getString();
+
+        public static string sSettings_Tiling_FloatExes => getString();
+
+        public static string sSettings_Tiling_FocusFollowsMouse => getString();
+
+        public static string sSettings_Tiling_FocusFollowsMouseRaise => getString();
+
+        public static string sSettings_Tiling_FocusFollowsMouseDelay => getString();
+
+        public static string sSettings_Tiling_FocusFollowsMouseMode => getString();
+
+        public static string sSettings_Tiling_RemapWinL => getString();
+
+        public static string sSettings_Tiling_RemapWinLUnavailable => getString();
+
+        public static string sSettings_Tiling_ExplorerHotkeysHelp => getString();
+
+        public static string sSettings_Tiling_ElevatedHelp => getString();
+
+        public static string sSettings_Tiling_Behavior => getString();
+
+        public static string sSettings_Tiling_Focus => getString();
+
+        public static string sSettings_Tiling_Keyboard => getString();
+
+        public static string sLauncher_Placeholder => getString();
+
+        public static string sLauncher_NoResults => getString();
     }
 }

@@ -19,6 +19,8 @@ using CairoDesktop.AppGrabber.Commands;
 using CairoDesktop.MenuBar.Commands;
 using CairoDesktop.MenuBarExtensions.Commands;
 using CairoDesktop.MenuBarExtensions.Services;
+using CairoDesktop.Tiling;
+using CairoDesktop.Tiling.Commands;
 
 namespace CairoDesktop
 {
@@ -71,6 +73,12 @@ namespace CairoDesktop
                     services.AddSingleton<ShellWindowService>();
                     services.AddSingleton<IWindowService, MenuBarWindowService>();
 
+                    services.AddSingleton<HiddenWindowJournal>();
+                    services.AddSingleton<WorkstationLockManager>();
+                    services.AddSingleton<ITilingManager, TilingManager>();
+                    services.AddHostedService<TilingService>();
+                    services.AddHostedService<TilingHotKeyService>();
+
 #if ENABLEFIRSTRUN
                     services.AddHostedService<FirstRunService>();
 #endif
@@ -119,6 +127,27 @@ namespace CairoDesktop
                     services.AddSingleton<ICairoCommand, ToggleCairoMenuCommand>();
                     services.AddSingleton<ICairoCommand, ToggleCalendarCommand>();
                     services.AddSingleton<ICairoCommand, ToggleSearchCommand>();
+
+                    // Tiling commands
+                    services.AddSingleton<ICairoCommand, TilingViewTagCommand>();
+                    services.AddSingleton<ICairoCommand, TilingMoveToTagCommand>();
+                    services.AddSingleton<ICairoCommand, TilingViewPreviousTagCommand>();
+                    services.AddSingleton<ICairoCommand, TilingFocusDirectionCommand>();
+                    services.AddSingleton<ICairoCommand, TilingSwapDirectionCommand>();
+                    services.AddSingleton<ICairoCommand, TilingMoveDirectionCommand>();
+                    services.AddSingleton<ICairoCommand, TilingResizeCommand>();
+                    services.AddSingleton<ICairoCommand, TilingFocusNextCommand>();
+                    services.AddSingleton<ICairoCommand, TilingFocusPrevCommand>();
+                    services.AddSingleton<ICairoCommand, TilingToggleOrientationCommand>();
+                    services.AddSingleton<ICairoCommand, TilingEqualizeCommand>();
+                    services.AddSingleton<ICairoCommand, TilingToggleFloatingCommand>();
+                    services.AddSingleton<ICairoCommand, TilingToggleFullscreenCommand>();
+                    services.AddSingleton<ICairoCommand, TilingCloseWindowCommand>();
+                    services.AddSingleton<ICairoCommand, TilingFocusScreenCommand>();
+                    services.AddSingleton<ICairoCommand, TilingMoveToScreenCommand>();
+                    services.AddSingleton<ICairoCommand, TilingLaunchTerminalCommand>();
+                    services.AddSingleton<ICairoCommand, RestartCairoCommand>();
+                    services.AddSingleton<ICairoCommand, DisplayProjectionCommand>();
                 })
                 .ConfigureLogging((context, logging) =>
                 {
