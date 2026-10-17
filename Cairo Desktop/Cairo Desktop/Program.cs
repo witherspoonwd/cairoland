@@ -19,6 +19,7 @@ using CairoDesktop.AppGrabber.Commands;
 using CairoDesktop.MenuBar.Commands;
 using CairoDesktop.MenuBarExtensions.Commands;
 using CairoDesktop.MenuBarExtensions.Services;
+using CairoDesktop.MenuBar.Launcher;
 using CairoDesktop.Tiling;
 using CairoDesktop.Tiling.Commands;
 
@@ -76,6 +77,8 @@ namespace CairoDesktop
                     services.AddSingleton<HiddenWindowJournal>();
                     services.AddSingleton<WorkstationLockManager>();
                     services.AddSingleton<ITilingManager, TilingManager>();
+                    services.AddSingleton<ProgramIndex>();
+                    services.AddSingleton<LaunchHistory>();
                     services.AddHostedService<TilingService>();
                     services.AddHostedService<TilingHotKeyService>();
 
@@ -148,6 +151,7 @@ namespace CairoDesktop
                     services.AddSingleton<ICairoCommand, TilingLaunchTerminalCommand>();
                     services.AddSingleton<ICairoCommand, RestartCairoCommand>();
                     services.AddSingleton<ICairoCommand, DisplayProjectionCommand>();
+                    services.AddSingleton<ICairoCommand, ToggleProgramLauncherCommand>();
                 })
                 .ConfigureLogging((context, logging) =>
                 {

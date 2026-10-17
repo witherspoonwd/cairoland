@@ -1,0 +1,121 @@
+<Window x:Class="CairoDesktop.MenuBar.Launcher.ProgramLauncherWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:l10n="clr-namespace:CairoDesktop.Common.Localization;assembly=CairoDesktop.Common"
+        xmlns:launcher="clr-namespace:CairoDesktop.MenuBar.Launcher"
+        Title="Program Launcher"
+        Width="600"
+        SizeToContent="Height"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        Topmost="True"
+        UseLayoutRounding="True"
+        Deactivated="Window_Deactivated"
+        PreviewKeyDown="Window_PreviewKeyDown"
+        SizeChanged="Window_SizeChanged">
+    <Border Margin="10"
+            CornerRadius="4"
+            Background="{DynamicResource MenuBackgroundGradient}"
+            BorderBrush="{DynamicResource MenuBorderBrush}"
+            BorderThickness="1"
+            Effect="{DynamicResource MenuShadow}">
+        <StackPanel Orientation="Vertical"
+                    Margin="6">
+            <Grid>
+                <TextBox x:Name="SearchBox"
+                         FontSize="16"
+                         Padding="6,4"
+                         BorderThickness="0,0,0,1"
+                         BorderBrush="{DynamicResource MenuSeparator}"
+                         Background="Transparent"
+                         Foreground="{DynamicResource MenuItemForeground}"
+                         CaretBrush="{DynamicResource MenuItemForeground}"
+                         TextChanged="SearchBox_TextChanged" />
+                <TextBlock Text="{Binding Path=(l10n:DisplayString.sLauncher_Placeholder)}"
+                           FontSize="16"
+                           Margin="9,5,0,0"
+                           IsHitTestVisible="False"
+                           Foreground="{DynamicResource MenuItemForeground}"
+                           Opacity="0.4">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Text, ElementName=SearchBox}" Value="">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+            </Grid>
+            <ListBox x:Name="ResultsList"
+                     Margin="0,6,0,0"
+                     Background="Transparent"
+                     BorderThickness="0"
+                     Focusable="False"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                     MouseDoubleClick="ResultsList_MouseDoubleClick">
+                <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="Focusable" Value="False" />
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ListBoxItem">
+                                    <Border x:Name="ItemBorder"
+                                            CornerRadius="3"
+                                            Padding="6,4"
+                                            Background="Transparent">
+                                        <ContentPresenter />
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource MenuHeaderHoverBackground}" />
+                                        </Trigger>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource MenuItemHoverGradient}" />
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </ListBox.ItemContainerStyle>
+                <ListBox.ItemTemplate>
+                    <DataTemplate DataType="{x:Type launcher:LauncherResult}">
+                        <DockPanel>
+                            <Image Source="{Binding Entry.App.Icon}"
+                                   Width="24"
+                                   Height="24"
+                                   Margin="0,0,10,0"
+                                   VerticalAlignment="Center"
+                                   RenderOptions.BitmapScalingMode="HighQuality" />
+                            <StackPanel Orientation="Vertical"
+                                        VerticalAlignment="Center">
+                                <TextBlock launcher:HighlightedText.Segments="{Binding NameSegments}"
+                                           FontSize="13"
+                                           TextTrimming="CharacterEllipsis"
+                                           Foreground="{DynamicResource MenuItemForeground}" />
+                                <TextBlock Text="{Binding Entry.ExeName}"
+                                           FontSize="11"
+                                           TextTrimming="CharacterEllipsis"
+                                           Foreground="{DynamicResource MenuItemForeground}"
+                                           Opacity="0.55" />
+                            </StackPanel>
+                        </DockPanel>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+            <TextBlock x:Name="NoResultsText"
+                       Text="{Binding Path=(l10n:DisplayString.sLauncher_NoResults)}"
+                       Margin="8,8,8,6"
+                       Foreground="{DynamicResource MenuItemForeground}"
+                       Opacity="0.55"
+                       Visibility="Collapsed" />
+        </StackPanel>
+    </Border>
+</Window>
