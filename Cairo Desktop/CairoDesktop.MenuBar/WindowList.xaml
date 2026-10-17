@@ -1,0 +1,104 @@
+<UserControl x:Class="CairoDesktop.MenuBar.WindowList"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:l10n="clr-namespace:CairoDesktop.Common.Localization;assembly=CairoDesktop.Common"
+             xmlns:control="clr-namespace:CairoDesktop.MenuBar"
+             Focusable="False"
+             Height="22"
+             VerticalAlignment="Center">
+    <ItemsControl ItemsSource="{Binding Windows}"
+                  Focusable="False"
+                  Margin="0,0,6,0">
+        <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+                <control:WindowListPanel MaxItemWidth="200" />
+            </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+            <DataTemplate>
+                <Border x:Name="ItemBorder"
+                        Height="20"
+                        Margin="1,1,1,1"
+                        Padding="4,0"
+                        CornerRadius="2"
+                        Background="Transparent"
+                        ToolTip="{Binding Title}"
+                        MouseUp="Item_MouseUp">
+                    <Border.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="{Binding Path=(l10n:DisplayString.sWindowManager_Float)}"
+                                      IsCheckable="True"
+                                      IsChecked="{Binding IsFloating, Mode=OneWay}"
+                                      Command="{Binding ToggleFloatingCommand}" />
+                            <MenuItem Header="{Binding Path=(l10n:DisplayString.sWindowManager_MoveToTag)}">
+                                <MenuItem Header="1" Command="{Binding MoveToTagCommand}" CommandParameter="0" />
+                                <MenuItem Header="2" Command="{Binding MoveToTagCommand}" CommandParameter="1" />
+                                <MenuItem Header="3" Command="{Binding MoveToTagCommand}" CommandParameter="2" />
+                                <MenuItem Header="4" Command="{Binding MoveToTagCommand}" CommandParameter="3" />
+                                <MenuItem Header="5" Command="{Binding MoveToTagCommand}" CommandParameter="4" />
+                                <MenuItem Header="6" Command="{Binding MoveToTagCommand}" CommandParameter="5" />
+                                <MenuItem Header="7" Command="{Binding MoveToTagCommand}" CommandParameter="6" />
+                                <MenuItem Header="8" Command="{Binding MoveToTagCommand}" CommandParameter="7" />
+                                <MenuItem Header="9" Command="{Binding MoveToTagCommand}" CommandParameter="8" />
+                                <MenuItem Header="0" Command="{Binding MoveToTagCommand}" CommandParameter="9" />
+                            </MenuItem>
+                            <Separator />
+                            <MenuItem Header="{Binding Path=(l10n:DisplayString.sCommand_TilingCloseWindow)}"
+                                      Command="{Binding CloseCommand}" />
+                        </ContextMenu>
+                    </Border.ContextMenu>
+                    <DockPanel LastChildFill="True">
+                        <Image Source="{Binding Icon}"
+                               Width="16"
+                               Height="16"
+                               Margin="0,0,4,0"
+                               VerticalAlignment="Center"
+                               DockPanel.Dock="Left"
+                               RenderOptions.BitmapScalingMode="HighQuality" />
+                        <TextBlock x:Name="FloatingMark"
+                                   Text="&#x25C7;"
+                                   Margin="4,0,0,0"
+                                   VerticalAlignment="Center"
+                                   DockPanel.Dock="Right"
+                                   Foreground="{DynamicResource MenuHeaderForeground}"
+                                   Opacity="0.7"
+                                   Visibility="Collapsed" />
+                        <TextBlock x:Name="TitleText"
+                                   Text="{Binding Title}"
+                                   VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"
+                                   Foreground="{DynamicResource MenuHeaderForeground}"
+                                   Opacity="{DynamicResource TilingTagEmptyOpacity}" />
+                    </DockPanel>
+                </Border>
+                <DataTemplate.Triggers>
+                    <Trigger SourceName="ItemBorder"
+                             Property="IsMouseOver"
+                             Value="True">
+                        <Setter TargetName="ItemBorder"
+                                Property="Background"
+                                Value="{DynamicResource MenuHeaderHoverBackground}" />
+                        <Setter TargetName="TitleText"
+                                Property="Opacity"
+                                Value="1" />
+                    </Trigger>
+                    <DataTrigger Binding="{Binding IsFloating}"
+                                 Value="True">
+                        <Setter TargetName="FloatingMark"
+                                Property="Visibility"
+                                Value="Visible" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding IsFocused}"
+                                 Value="True">
+                        <Setter TargetName="ItemBorder"
+                                Property="Background"
+                                Value="{DynamicResource MenuItemHoverGradient}" />
+                        <Setter TargetName="TitleText"
+                                Property="Opacity"
+                                Value="1" />
+                    </DataTrigger>
+                </DataTemplate.Triggers>
+            </DataTemplate>
+        </ItemsControl.ItemTemplate>
+    </ItemsControl>
+</UserControl>

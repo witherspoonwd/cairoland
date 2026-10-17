@@ -95,6 +95,11 @@
                       Opacity="0.6"
                       BlurRadius="0" />
     <Thickness x:Key="MenuBarBorderThickness" Bottom="1" />
+
+    <!-- Tiling: the tag bar and window list reuse the menu brushes above, so themes restyle them automatically -->
+    <SolidColorBrush Color="#D0D86B00"
+                     x:Key="TilingTagUrgentBackground" />
+    <system:Double x:Key="TilingTagEmptyOpacity">0.5</system:Double>
     <SolidColorBrush Color="#FF9a9a9a"
                      x:Key="NoItemsForeground" />
     <RadialGradientBrush x:Key="NotifyBalloonBackground"

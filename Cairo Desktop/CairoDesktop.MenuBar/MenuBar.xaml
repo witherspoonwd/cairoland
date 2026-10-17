@@ -39,6 +39,7 @@
 					<MenuItem />
                 </MenuItem>
             </Menu>
+            <control:TagBar x:Name="tagBar" />
         </StackPanel>
         <StackPanel Orientation="Horizontal"
                     DockPanel.Dock="Right"
@@ -49,6 +50,6 @@
                     Margin="0,0,0,0">
         </StackPanel>
         <!-- Last item added to DockPanel fills the remaining space! -->
-        <Grid />
+        <control:WindowList x:Name="windowList" />
     </DockPanel>
 </objectModel:CairoAppBarWindow>

@@ -17,6 +17,7 @@
     <Window.Resources>
         <supportingClasses:EnumStringConverter x:Key="enumStringConverter" />
         <supportingClasses:InvertBoolConverter x:Key="invertBoolConverter" />
+        <supportingClasses:StringArrayConverter x:Key="stringArrayConverter" />
         <Style x:Key="CairoSettingsBarRestartStyle"
                TargetType="{x:Type TabItem}">
             <Setter Property="Foreground"
@@ -457,6 +458,129 @@
                                    Text="{Binding Path=(l10n:DisplayString.sSettings_MenuBar_NotificationAreaPinHelp)}" />
                     </StackPanel>
                 </StackPanel>
+            </TabItem>
+
+            <TabItem Header="{Binding Path=(l10n:DisplayString.sSettings_Tiling)}"
+                     Name="TabTiling">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              MaxHeight="520">
+                <StackPanel Orientation="Vertical">
+                    <CheckBox IsChecked="{Binding Path=EnableTiling, UpdateSourceTrigger=PropertyChanged}"
+                              Name="chkEnableTiling">
+                        <Label Content="{Binding Path=(l10n:DisplayString.sSettings_Tiling_EnableTiling)}" />
+                    </CheckBox>
+                    <CheckBox IsChecked="{Binding Path=EnableTilingOutsideShell, UpdateSourceTrigger=PropertyChanged}"
+                              Name="chkEnableTilingOutsideShell">
+                        <Label Content="{Binding Path=(l10n:DisplayString.sSettings_Tiling_EnableTilingOutsideShell)}" />
+                    </CheckBox>
+
+                    <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_Tiling_Behavior)}"
+                               Style="{StaticResource SettingGroupHeader}" />
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_Tiling_Gap)}" />
+                        <Slider Name="sldTilingGap"
+                                Minimum="0"
+                                Maximum="32"
+                                Width="150"
+                                IsSnapToTickEnabled="True"
+                                TickFrequency="1"
+                                VerticalAlignment="Center"
+                                Value="{Binding Path=TilingGap, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="{Binding Path=TilingGap}"
+                                   MinWidth="24"
+                                   Margin="8,0,0,0" />
+                    </StackPanel>
+                    <CheckBox IsChecked="{Binding Path=TilingFollowActivation, UpdateSourceTrigger=PropertyChanged}"
+                              Name="chkTilingFollowActivation">
+                        <Label Content="{Binding Path=(l10n:DisplayString.sSettings_Tiling_FollowActivation)}" />
+                    </CheckBox>
+                    <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_Tiling_FloatClasses)}" />
+                    <TextBox Name="txtTilingFloatClasses"
+                             Width="400"
+                             HorizontalAlignment="Left"
+                             Text="{Binding Path=TilingFloatClasses, Converter={StaticResource stringArrayConverter}, UpdateSourceTrigger=LostFocus}" />
+                    <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_Tiling_FloatExes)}" />
+                    <TextBox Name="txtTilingFloatExes"
+                             Width="400"
+                             HorizontalAlignment="Left"
+                             Text="{Binding Path=TilingFloatExes, Converter={StaticResource stringArrayConverter}, UpdateSourceTrigger=LostFocus}" />
+                    <TextBlock Width="400"
+                               HorizontalAlignment="Left"
+                               Foreground="#88ffffff"
+                               TextWrapping="Wrap"
+                               Text="{Binding Path=(l10n:DisplayString.sSettings_Tiling_ElevatedHelp)}" />
+
+                    <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_Tiling_Focus)}"
+                               Style="{StaticResource SettingGroupHeader}" />
+                    <CheckBox IsChecked="{Binding Path=EnableFocusFollowsMouse, UpdateSourceTrigger=PropertyChanged}"
+                              Name="chkEnableFocusFollowsMouse">
+                        <Label Content="{Binding Path=(l10n:DisplayString.sSettings_Tiling_FocusFollowsMouse)}" />
+                    </CheckBox>
+                    <CheckBox IsChecked="{Binding Path=FocusFollowsMouseRaise, UpdateSourceTrigger=PropertyChanged}"
+                              IsEnabled="{Binding IsChecked, ElementName=chkEnableFocusFollowsMouse}"
+                              Name="chkFocusFollowsMouseRaise">
+                        <Label Content="{Binding Path=(l10n:DisplayString.sSettings_Tiling_FocusFollowsMouseRaise)}" />
+                    </CheckBox>
+                    <StackPanel Orientation="Horizontal"
+                                IsEnabled="{Binding IsChecked, ElementName=chkEnableFocusFollowsMouse}">
+                        <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_Tiling_FocusFollowsMouseDelay)}" />
+                        <TextBox Name="txtFocusFollowsMouseDelay"
+                                 Width="50">
+                            <TextBox.Text>
+                                <Binding Path="FocusFollowsMouseDelayMs"
+                                         UpdateSourceTrigger="PropertyChanged">
+                                    <Binding.ValidationRules>
+                                        <supportingClasses:IntegerValidationRule />
+                                    </Binding.ValidationRules>
+                                </Binding>
+                            </TextBox.Text>
+                        </TextBox>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal"
+                                IsEnabled="{Binding IsChecked, ElementName=chkEnableFocusFollowsMouse}">
+                        <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_Tiling_FocusFollowsMouseMode)}" />
+                        <ComboBox Name="cboFocusFollowsMouseMode"
+                                  IsDropDownOpen="False"
+                                  IsEditable="False"
+                                  Width="100"
+                                  SelectedValue="{Binding Path=FocusFollowsMouseMode, UpdateSourceTrigger=PropertyChanged}" />
+                    </StackPanel>
+
+                    <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_Tiling_Keyboard)}"
+                               Style="{StaticResource SettingGroupHeader}" />
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_Tiling_Modifier)}" />
+                        <ComboBox Name="cboTilingModifier"
+                                  IsDropDownOpen="False"
+                                  IsEditable="False"
+                                  Width="100"
+                                  SelectedValue="{Binding Path=TilingModifier, UpdateSourceTrigger=PropertyChanged}" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_Tiling_TerminalCommand)}" />
+                        <TextBox Name="txtTerminalCommand"
+                                 Width="250"
+                                 Text="{Binding Path=TerminalCommand, UpdateSourceTrigger=LostFocus}" />
+                    </StackPanel>
+                    <CheckBox IsChecked="{Binding Path=RemapWinL, UpdateSourceTrigger=PropertyChanged}"
+                              Name="chkRemapWinL">
+                        <Label Content="{Binding Path=(l10n:DisplayString.sSettings_Tiling_RemapWinL)}" />
+                    </CheckBox>
+                    <TextBlock Name="txtRemapWinLUnavailable"
+                               Width="400"
+                               HorizontalAlignment="Left"
+                               Foreground="#FFFFB060"
+                               TextWrapping="Wrap"
+                               Visibility="Collapsed"
+                               Text="{Binding Path=(l10n:DisplayString.sSettings_Tiling_RemapWinLUnavailable)}" />
+                    <TextBlock Width="400"
+                               HorizontalAlignment="Left"
+                               Foreground="#88ffffff"
+                               TextWrapping="Wrap"
+                               Text="{Binding Path=(l10n:DisplayString.sSettings_Tiling_ExplorerHotkeysHelp)}" />
+                </StackPanel>
+                </ScrollViewer>
             </TabItem>
 
             <TabItem Header="{Binding Path=(l10n:DisplayString.sSettings_Advanced)}">

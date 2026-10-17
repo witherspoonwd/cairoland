@@ -23,6 +23,7 @@ using ManagedShell.Common.Logging;
 using OpenFileDialog = System.Windows.Forms.OpenFileDialog;
 using ManagedShell.Common.Enums;
 using CairoDesktop.Services;
+using CairoDesktop.Tiling;
 using ManagedShell.AppBar;
 
 namespace CairoDesktop
@@ -39,6 +40,7 @@ namespace CairoDesktop
         private readonly ShellManager _shellManager;
         private readonly IThemeService _themeService;
         private readonly SettingsUIService _uiService;
+        private readonly WorkstationLockManager _lockManager;
         private readonly Settings _settings;
 
         internal SettingsUI(ICairoApplication cairoApplication,
@@ -48,6 +50,7 @@ namespace CairoDesktop
             IAppGrabber appGrabber,
             IThemeService themeService,
             ICommandService commandService,
+            WorkstationLockManager lockManager,
             Settings settings)
         {
             InitializeComponent();
@@ -59,6 +62,7 @@ namespace CairoDesktop
             _shellManager = shellManagerService.ShellManager;
             _themeService = themeService;
             _uiService = uiService;
+            _lockManager = lockManager;
             _settings = settings;
 
             DataContext = _settings;
@@ -68,6 +72,7 @@ namespace CairoDesktop
             loadRadioGroups();
             loadHotKeys();
             loadLoggingLevels();
+            loadTilingSettings();
             loadNotificationSettings();
             loadVersionDependentSettings();
 
@@ -154,6 +159,16 @@ namespace CairoDesktop
             {
                 cboCairoMenuHotKeyKey.Items.Add(key);
             }
+        }
+
+        private void loadTilingSettings()
+        {
+            cboTilingModifier.Items.Add("Win");
+            cboTilingModifier.Items.Add("Alt+Win");
+            cboFocusFollowsMouseMode.Items.Add("Native");
+            cboFocusFollowsMouseMode.Items.Add("Polling");
+
+            txtRemapWinLUnavailable.Visibility = _lockManager.IsUnavailable ? Visibility.Visible : Visibility.Collapsed;
         }
 
         private void loadLoggingLevels()

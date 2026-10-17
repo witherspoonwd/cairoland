@@ -21,6 +21,10 @@ using ManagedShell.ShellFolders;
 using Microsoft.Extensions.Hosting;
 using CairoDesktop.Infrastructure.Services;
 using System.Collections.Generic;
+using System.Windows.Data;
+using CairoDesktop.Common.Localization;
+using CairoDesktop.Tiling;
+using CairoDesktop.Tiling.ViewModels;
 
 namespace CairoDesktop.MenuBar
 {
@@ -31,18 +35,22 @@ namespace CairoDesktop.MenuBar
         internal readonly ICommandService _commandService;
         private readonly Settings _settings;
         private readonly AppBarEventService _appBarEventService;
+        private readonly ITilingManager _tilingManager;
         private readonly Dictionary<INotifyPropertyChanged, PropertyChangedEventHandler> _commandPropertyChangedHandlers = new Dictionary<INotifyPropertyChanged, PropertyChangedEventHandler>();
         private readonly Dictionary<UserControlMenuBarExtension, UserControl> _loadedMenuExtras = new Dictionary<UserControlMenuBarExtension, UserControl>();
 
         private bool isCairoMenuInitialized;
         private MenuBarShadow shadow;
 
-        public MenuBar(ICairoApplication cairoApplication, AppBarEventService appBarEventService, ShellManager shellManager, IWindowManager windowManager, IApplicationUpdateService applicationUpdateService, ISettingsUIService settingsUiService, ICommandService commandService, Settings settings, AppBarScreen screen, AppBarEdge edge, AppBarMode mode) : base(cairoApplication, shellManager, windowManager, screen, edge, mode, 23)
+        private static readonly int[] GapChoices = { 0, 4, 6, 10, 16 };
+
+        public MenuBar(ICairoApplication cairoApplication, AppBarEventService appBarEventService, ShellManager shellManager, IWindowManager windowManager, IApplicationUpdateService applicationUpdateService, ISettingsUIService settingsUiService, ICommandService commandService, ITilingManager tilingManager, Settings settings, AppBarScreen screen, AppBarEdge edge, AppBarMode mode) : base(cairoApplication, shellManager, windowManager, screen, edge, mode, 23)
         {
             _appBarEventService = appBarEventService;
             _applicationUpdateService = applicationUpdateService;
             _settingsUiService = settingsUiService;
             _commandService = commandService;
+            _tilingManager = tilingManager;
             _settings = settings;
 
             object menuBarWindowAllowsTransparencyResource = TryFindResource("MenuBarWindowAllowsTransparency");
@@ -50,14 +58,36 @@ namespace CairoDesktop.MenuBar
                 AllowsTransparency = resourceValue;
 
             InitializeComponent();
-            
+
             AutoHideShowDelayMs = _settings.AutoHideShowDelayMs;
             RequiresScreenEdge = true;
 
+            setupChildren();
+
             _settings.PropertyChanged += Settings_PropertyChanged;
+            _tilingManager.EnabledChanged += TilingManager_EnabledChanged;
 
             // Set element that should be transformed for auto-hide
             AutoHideElement = MenuBarWindow;
+        }
+
+        private void setupChildren()
+        {
+            // screens are matched by device name, since AppBarScreen instances are recreated on display changes
+            ScreenTagsViewModel model = _tilingManager.GetScreenModel(Screen);
+            tagBar.DataContext = model;
+            windowList.DataContext = model;
+
+            // hidden while tiling is off
+            BooleanToVisibilityConverter converter = new BooleanToVisibilityConverter();
+            tagBar.SetBinding(VisibilityProperty, new Binding(nameof(ScreenTagsViewModel.IsActive)) { Converter = converter, FallbackValue = Visibility.Collapsed });
+            windowList.SetBinding(VisibilityProperty, new Binding(nameof(ScreenTagsViewModel.IsActive)) { Converter = converter, FallbackValue = Visibility.Collapsed });
+        }
+
+        private void TilingManager_EnabledChanged(object sender, EventArgs e)
+        {
+            setupChildren();
+            ClearCommandHandlers();
         }
 
         private void SetupMenuBarExtensions()
@@ -126,6 +156,7 @@ namespace CairoDesktop.MenuBar
                 "CheckForUpdates",
                 "",
                 "OpenCairoSettings",
+                WindowManagerMenuIdentifier,
                 "OpenControlPanel",
                 "OpenWindowsSettings",
                 "",
@@ -151,6 +182,12 @@ namespace CairoDesktop.MenuBar
                     continue;
                 }
 
+                if (identifier == WindowManagerMenuIdentifier)
+                {
+                    CairoMenu.Items.Add(BuildWindowManagerMenu());
+                    continue;
+                }
+
                 var command = _commandService.Commands.FirstOrDefault(cmd => cmd.Identifier == identifier);
                 if (command == null)
                 {
@@ -159,6 +196,7 @@ namespace CairoDesktop.MenuBar
                 var menuItem = new MenuItem
                 {
                     Header = command.Label,
+                    Tag = command.Identifier,
                     Visibility = command.IsAvailable ? Visibility.Visible : Visibility.Collapsed
                 };
                 menuItem.Click += (_sender, _e) => _commandService.InvokeCommand(command.Identifier);
@@ -186,7 +224,8 @@ namespace CairoDesktop.MenuBar
             // TODO: Extensions should instead define Commands, and the user can add them to the Cairo menu
             if (_cairoApplication.CairoMenu.Count > 0)
             {
-                var insertIndex = Array.IndexOf(cairoMenuItems, "OpenWindowsSettings") + 1;
+                var anchor = CairoMenu.Items.OfType<MenuItem>().FirstOrDefault(item => (item.Tag as string) == "OpenWindowsSettings");
+                var insertIndex = anchor != null ? CairoMenu.Items.IndexOf(anchor) + 1 : CairoMenu.Items.Count;
                 CairoMenu.Items.Insert(insertIndex, new Separator());
                 foreach (var cairoMenuItem in _cairoApplication.CairoMenu)
                 {
@@ -200,6 +239,77 @@ namespace CairoDesktop.MenuBar
             DeduplicateSeparators();
 
             isCairoMenuInitialized = true;
+        }
+
+        private const string WindowManagerMenuIdentifier = "|WindowManagerMenu|";
+
+        /// <summary>
+        /// Cairo menu ▸ Window Manager: tiling toggles bound to settings, gaps, and shortcuts to related commands.
+        /// </summary>
+        private MenuItem BuildWindowManagerMenu()
+        {
+            MenuItem root = new MenuItem { Header = DisplayString.sWindowManager };
+
+            root.Items.Add(CreateSettingToggle(DisplayString.sWindowManager_EnableTiling, nameof(Settings.EnableTiling)));
+            root.Items.Add(CreateSettingToggle(DisplayString.sWindowManager_FocusFollowsMouse, nameof(Settings.EnableFocusFollowsMouse)));
+            root.Items.Add(CreateSettingToggle(DisplayString.sWindowManager_RaiseOnFocus, nameof(Settings.FocusFollowsMouseRaise)));
+            root.Items.Add(CreateSettingToggle(DisplayString.sWindowManager_FollowActivation, nameof(Settings.TilingFollowActivation)));
+
+            MenuItem gaps = new MenuItem { Header = DisplayString.sWindowManager_Gaps };
+            foreach (int gap in GapChoices)
+            {
+                MenuItem gapItem = new MenuItem { Header = gap.ToString(), IsCheckable = true };
+                gapItem.Click += (_sender, _e) => _settings.TilingGap = gap;
+                gaps.Items.Add(gapItem);
+            }
+            gaps.SubmenuOpened += (_sender, _e) =>
+            {
+                foreach (MenuItem gapItem in gaps.Items.OfType<MenuItem>())
+                {
+                    gapItem.IsChecked = gapItem.Header as string == _settings.TilingGap.ToString();
+                }
+            };
+            root.Items.Add(gaps);
+
+            root.Items.Add(new Separator());
+            root.Items.Add(CreateCommandItem("TilingEqualize"));
+            root.Items.Add(CreateCommandItem("DisplayProjection"));
+            root.Items.Add(new Separator());
+
+            MenuItem settingsItem = new MenuItem { Header = DisplayString.sWindowManager_Settings };
+            settingsItem.Click += (_sender, _e) => _settingsUiService.Show("tiling");
+            root.Items.Add(settingsItem);
+
+            return root;
+        }
+
+        private MenuItem CreateSettingToggle(string header, string settingName)
+        {
+            MenuItem item = new MenuItem { Header = header, IsCheckable = true };
+            item.SetBinding(MenuItem.IsCheckedProperty, new Binding(settingName) { Source = _settings, Mode = BindingMode.TwoWay });
+            return item;
+        }
+
+        private MenuItem CreateCommandItem(string identifier)
+        {
+            var command = _commandService.Commands.FirstOrDefault(cmd => cmd.Identifier == identifier);
+            MenuItem item = new MenuItem { Header = command?.Label ?? identifier, IsEnabled = command?.IsAvailable == true };
+            item.Click += (_sender, _e) => _commandService.InvokeCommand(identifier);
+
+            if (command is INotifyPropertyChanged notifyPropertyChangedCommand)
+            {
+                PropertyChangedEventHandler changeHandler = (_sender, _e) =>
+                {
+                    if (_e.PropertyName == "IsAvailable")
+                    {
+                        item.IsEnabled = command.IsAvailable;
+                    }
+                };
+                notifyPropertyChangedCommand.PropertyChanged += changeHandler;
+                _commandPropertyChangedHandlers[notifyPropertyChangedCommand] = changeHandler;
+            }
+
+            return item;
         }
 
         private void DeduplicateSeparators()
@@ -287,6 +397,7 @@ namespace CairoDesktop.MenuBar
 
             closeShadow();
             _settings.PropertyChanged -= Settings_PropertyChanged;
+            _tilingManager.EnabledChanged -= TilingManager_EnabledChanged;
             StopMenuBarExtensions();
             ClearCommandHandlers();
         }
