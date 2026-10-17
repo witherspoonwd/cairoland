@@ -134,7 +134,6 @@ namespace CairoDesktop.Common.Localization
 
         public static string sProgramsMenu => getString();
 
-        public static string sPlacesMenu => getString();
 
         public static string sCairoMenu_AboutCairo => getString();
 
@@ -190,9 +189,7 @@ namespace CairoDesktop.Common.Localization
 
         public static string sInterface_RunAsUser => getString();
 
-        public static string sInterface_AddToStacks => getString();
 
-        public static string sInterface_RemoveFromStacks => getString();
 
         public static string sInterface_Copy => getString();
 
@@ -302,17 +299,12 @@ namespace CairoDesktop.Common.Localization
 
         public static string sShutDown_ShutDown => getString();
 
-        public static string sProgramsMenu_Empty => getString();
 
         public static string sProgramsMenu_UninstallAProgram => getString();
 
-        public static string sProgramsMenu_SearchPlaceholder => getString();
 
-        public static string sProgramsMenu_SearchNoResults => getString();
 
-        public static string sProgramsMenu_AddToMenu => getString();
 
-        public static string sProgramsMenu_RemoveFromMenu => getString();
 
         public static string sProgramsMenu_RemoveTitle => getString();
 
@@ -326,35 +318,23 @@ namespace CairoDesktop.Common.Localization
 
         public static string sProgramsMenu_UWPInfo => getString();
 
-        public static string sProgramsMenu_AddToQuickLaunch => getString();
 
-        public static string sProgramsMenu_ChangeCategory => getString();
 
-        public static string sProgramsMenu_AddToNewCategory => getString();
 
-        public static string sProgramsMenu_AddCategoryTitle => getString();
 
-        public static string sProgramsMenu_AddCategoryInfo => getString();
 
-        public static string sProgramsMenu_DeleteCategoryTitle => getString();
 
-        public static string sProgramsMenu_DeleteCategoryInfo => getString();
 
         public static string sProgramsMenu_RenameTitle => getString();
 
         public static string sProgramsMenu_RenameAppInfo => getString();
 
-        public static string sProgramsMenu_RenameCategoryInfo => getString();
 
-        public static string sStacks_Tooltip => getString();
 
         public static string sStacks_OpenInNewWindow => getString();
 
-        public static string sStacks_OpenOnDesktop => getString();
 
-        public static string sStacks_Remove => getString();
 
-        public static string sStacks_Empty => getString();
 
         public static string sMenuBar_OpenDateTimeSettings => getString();
 
@@ -384,53 +364,29 @@ namespace CairoDesktop.Common.Localization
 
         public static string sDesktop_DeleteInfo => getString();
 
-        public static string sDesktop_BrowseTitle => getString();
 
-        public static string sDesktop_CurrentFolder => getString();
 
-        public static string sDesktop_Back => getString();
 
-        public static string sDesktop_Forward => getString();
 
-        public static string sDesktop_Browse => getString();
 
-        public static string sDesktop_Home => getString();
 
-        public static string sDesktop_Up => getString();
 
-        public static string sDesktop_SetHome => getString();
 
-        public static string sDesktop_ClearHistory => getString();
 
-        public static string sDesktop_ResetPosition => getString();
 
-        public static string sDesktop_GoToFolderMenu => getString();
 
-        public static string sDesktop_GoToFolderTitle => getString();
 
-        public static string sDesktop_GoToFolderMessage => getString();
 
-        public static string sTaskbar_Empty => getString();
 
-        public static string sTaskbar_Minimize => getString();
 
-        public static string sTaskbar_Restore => getString();
 
-        public static string sTaskbar_Move => getString();
 
-        public static string sTaskbar_Size => getString();
 
-        public static string sTaskbar_Maximize => getString();
 
-        public static string sTaskbar_NewWindow => getString();
 
-        public static string sTaskbar_Close => getString();
 
-        public static string sTaskbar_TaskView => getString();
 
-        public static string sTaskbar_TaskListToolTip => getString();
 
-        public static string sTaskbar_DesktopOverlayToolTip => getString();
 
         public static string sError_OhNo => getString();
 
@@ -442,9 +398,7 @@ namespace CairoDesktop.Common.Localization
 
         public static string sSettings_MenuBar => getString();
 
-        public static string sSettings_Desktop => getString();
 
-        public static string sSettings_Taskbar => getString();
 
         public static string sSettings_Appearance => getString();
 
@@ -484,9 +438,7 @@ namespace CairoDesktop.Common.Localization
 
         public static string sSettings_General_FileManager => getString();
 
-        public static string sSettings_General_FoldersOpenDesktopOverlay => getString();
 
-        public static string sSettings_MenuBar_DefaultProgramsCategory => getString();
 
         public static string sSettings_MenuBar_EnableMenuBarAutoHide => getString();
 
@@ -512,7 +464,6 @@ namespace CairoDesktop.Common.Localization
 
         public static string sSettings_MenuBar_EnableCairoMenuHotKey => getString();
 
-        public static string sSettings_MenuBar_EnableWinKey => getString();
 
         public static string sSettings_MenuBar_EnableMenuBarBlur => getString();
 
@@ -520,13 +471,9 @@ namespace CairoDesktop.Common.Localization
 
         public static string sSettings_MenuBar_ShowHibernate => getString();
 
-        public static string sSettings_MenuBar_ShowStacksRemovableDrives => getString();
 
-        public static string sSettings_MenuBar_ProgramsMenuLayout => getString();
 
-        public static string sSettings_MenuBar_ProgramsMenuLayoutRight => getString();
 
-        public static string sSettings_MenuBar_ProgramsMenuLayoutLeft => getString();
 
         public static string sSettings_MenuBar_MenuExtras => getString();
 
@@ -538,50 +485,28 @@ namespace CairoDesktop.Common.Localization
 
         public static string sSettings_MenuBar_EnableMenuExtraSearch => getString();
 
-        public static string sSettings_Desktop_EnableDesktop => getString();
-
-        public static string sSettings_Desktop_DesktopHome => getString();
-
-        public static string sSettings_Desktop_LabelPosition => getString();
-
-        public static string sSettings_Desktop_LabelPositionRight => getString();
-
-        public static string sSettings_Desktop_LabelPositionBottom => getString();
-
-        public static string sSettings_Desktop_DynamicDesktop => getString();
-
-        public static string sSettings_Desktop_EnableDynamicDesktop => getString();
-
-        public static string sSettings_Desktop_EnableDesktopOverlayHotKey => getString();
 
 
-        public static string sSettings_Desktop_DesktopBackgroundSettings => getString();
 
-        public static string sSettings_Desktop_BackgroundType => getString();
 
-        public static string sSettings_Desktop_BackgroundType_windowsDefaultBackground => getString();
 
-        public static string sSettings_Desktop_BackgroundType_cairoImageWallpaper => getString();
 
-        public static string sSettings_Desktop_BackgroundType_cairoVideoWallpaper => getString();
 
-        public static string sSettings_Desktop_BackgroundType_bingWallpaper => getString();
 
-        public static string sSettings_Desktop_Background_Path => getString();
 
-        public static string sSettings_Desktop_Background_Style => getString();
 
-        public static string sSettings_Desktop_BackgroundStyle_Tile => getString();
 
-        public static string sSettings_Desktop_BackgroundStyle_Center => getString();
 
-        public static string sSettings_Desktop_BackgroundStyle_Fit => getString();
 
-        public static string sSettings_Desktop_BackgroundStyle_Fill => getString();
 
-        public static string sSettings_Desktop_BackgroundStyle_Stretch => getString();
 
-        public static string sSettings_Desktop_BackgroundStyle_Span => getString();
+
+
+
+
+
+
+
 
         public static string sSettings_IconSize => getString();
 
@@ -591,53 +516,31 @@ namespace CairoDesktop.Common.Localization
 
         public static string sSettings_IconSizeSmall => getString();
 
-        public static string sSettings_Taskbar_EnableTaskbar => getString();
 
-        public static string sSettings_Taskbar_TaskbarEdge => getString();
 
         public static string sSettings_PositionBottom => getString();
 
         public static string sSettings_PositionTop => getString();
 
-        public static string sSettings_Taskbar_DisplayMode => getString();
 
-        public static string sSettings_Taskbar_DisplayModeAppBar => getString();
 
-        public static string sSettings_Taskbar_DisplayModeOverlap => getString();
 
-        public static string sSettings_Taskbar_DisplayModeAutoHide => getString();
 
-        public static string sSettings_Taskbar_EnableTaskbarMultiMon => getString();
 
-        public static string sSettings_Taskbar_FullWidthTaskBar => getString();
 
-        public static string sSettings_Taskbar_MiddleClick => getString();
 
-        public static string sSettings_Taskbar_MiddleClickNewWindow => getString();
 
-        public static string sSettings_Taskbar_MiddleClickCloseWindow => getString();
 
-        public static string sSettings_Taskbar_GroupBy => getString();
 
-        public static string sSettings_Taskbar_GroupByProgramsMenuCategory => getString();
 
-        public static string sSettings_Taskbar_GroupByApplication => getString();
 
-        public static string sSettings_Taskbar_GroupByApplicationCombined => getString();
 
-        public static string sSettings_Taskbar_ShowBadges => getString();
 
-        public static string sSettings_Taskbar_ShowLabels => getString();
 
-        public static string sSettings_Taskbar_EnableThumbnails => getString();
 
-        public static string sSettings_Taskbar_MultiMonMode => getString();
 
-        public static string sSettings_Taskbar_MultiMonMode_All => getString();
 
-        public static string sSettings_Taskbar_MultiMonMode_Primary => getString();
 
-        public static string sSettings_Taskbar_MultiMonMode_PerMonitor => getString();
 
         public static string sSettings_Advanced_LoggingLevel => getString();
 
@@ -677,9 +580,7 @@ namespace CairoDesktop.Common.Localization
 
         public static string sWelcome_MenuBar => getString();
 
-        public static string sWelcome_DynamicDesktop => getString();
 
-        public static string sWelcome_Taskbar => getString();
 
         public static string sWelcome_MenuBarText => getString();
 
@@ -687,17 +588,11 @@ namespace CairoDesktop.Common.Localization
 
         public static string sWelcome_MenuBarSec1Text => getString();
 
-        public static string sWelcome_MenuBarSec2Heading => getString();
 
-        public static string sWelcome_MenuBarSec2Text => getString();
 
-        public static string sWelcome_MenuBarSec3Heading => getString();
 
-        public static string sWelcome_MenuBarSec3Text => getString();
 
-        public static string sWelcome_MenuBarSec4Heading => getString();
 
-        public static string sWelcome_MenuBarSec4Text => getString();
 
         public static string sWelcome_MenuBarSec5Heading => getString();
 
@@ -707,37 +602,23 @@ namespace CairoDesktop.Common.Localization
 
         public static string sWelcome_MenuBarSec6Text => getString();
 
-        public static string sWelcome_DesktopText => getString();
 
-        public static string sWelcome_DesktopSec1Heading => getString();
 
-        public static string sWelcome_DesktopSec1Text => getString();
 
-        public static string sWelcome_DesktopSec2Heading => getString();
 
-        public static string sWelcome_DesktopSec2Text => getString();
 
-        public static string sWelcome_TaskbarText => getString();
 
-        public static string sWelcome_TaskbarSec1Heading => getString();
 
-        public static string sWelcome_TaskbarSec1Text => getString();
 
-        public static string sWelcome_TaskbarSec2Heading => getString();
 
-        public static string sWelcome_TaskbarSec2Text => getString();
 
-        public static string sWelcome_TaskbarSec3Heading => getString();
 
-        public static string sWelcome_TaskbarSec3Text => getString();
 
         public static string sCommand_OpenFile => getString();
 
         public static string sCommand_OpenLocation => getString();
 
-        public static string sCommand_OpenDesktopOverlay => getString();
 
-        public static string sCommand_CloseDesktopOverlay => getString();
 
         public static string sCommand_AddToPrograms => getString();
 
@@ -745,7 +626,6 @@ namespace CairoDesktop.Common.Localization
 
         public static string sCommand_ToggleCairoMenu => getString();
 
-        public static string sCommand_ToggleProgramsMenu => getString();
 
         public static string sCommand_ToggleCalendar => getString();
 

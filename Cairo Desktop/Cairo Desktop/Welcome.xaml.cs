@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Windows;
-using CairoDesktop.AppGrabber;
 using CairoDesktop.Application.Interfaces;
 using CairoDesktop.Common;
 using CairoDesktop.Common.Localization;
@@ -14,16 +13,14 @@ namespace CairoDesktop
     /// </summary>
     public partial class Welcome : Window
     {
-        private readonly IAppGrabber _appGrabber;
         private readonly ICairoApplication _cairoApplication;
         private readonly Settings _settings;
 
         const int maxSize = 780;
         string _initialLanguage = "en_US";
 
-        public Welcome(ICairoApplication cairoApplication, IAppGrabber appGrabber, Settings settings)
+        public Welcome(ICairoApplication cairoApplication, Settings settings)
         {
-            _appGrabber = appGrabber;
             _cairoApplication = cairoApplication;
             _settings = settings;
 
@@ -88,22 +85,9 @@ namespace CairoDesktop
             bdrMenuBar.Visibility = Visibility.Visible;
         }
 
-        private void btnGoPage3_Click(object sender, RoutedEventArgs e)
-        {
-            bdrMenuBar.Visibility = Visibility.Collapsed;
-            bdrDesktop.Visibility = Visibility.Visible;
-        }
-
-        private void btnGoPage4_Click(object sender, RoutedEventArgs e)
-        {
-            bdrDesktop.Visibility = Visibility.Collapsed;
-            bdrTaskbar.Visibility = Visibility.Visible;
-        }
-
-        private void btnAppGrabber_Click(object sender, RoutedEventArgs e)
+        private void btnFinish_Click(object sender, RoutedEventArgs e)
         {
             _settings.IsFirstRun = false;
-            _appGrabber?.ShowDialog();
             Close();
         }
 

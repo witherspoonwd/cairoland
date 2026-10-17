@@ -98,26 +98,17 @@
   <ItemGroup>
     <Resource Include="Application.ico" />
     <Resource Include="Resources\searchDefault.png" />
-    <Resource Include="Resources\controlsBack.png" />
-    <Resource Include="Resources\controlsForward.png" />
-    <Resource Include="Resources\controlsHome.png" />
     <Resource Include="Resources\menubarShadow.png" />
     <Resource Include="Resources\dateTimeIcon.png" />
     <Resource Include="Resources\searchBlack.png" />
     <Resource Include="Resources\menubarWhite.png" />
     <Resource Include="Resources\nullIcon.png" />
-    <Resource Include="Resources\taskListIcon.png" />
-    <Resource Include="Resources\controlsBrowse.png" />
-    <Resource Include="Resources\taskViewIcon.png" />
     <Resource Include="Resources\actionCenterDefault.png" />
     <Resource Include="Resources\actionCenterBlack.png" />
     <Resource Include="Resources\cairoMenuBlack.png" />
     <Resource Include="Resources\cairoMenuDefault.png" />
-    <Resource Include="Resources\desktopOverlayIcon.png" />
     <Resource Include="Resources\Welcome\cairoIcon.png" />
-    <Resource Include="Resources\Welcome\desktop.jpg" />
     <Resource Include="Resources\Welcome\menuBar.png" />
-    <Resource Include="Resources\Welcome\taskbar.png" />
     <Resource Include="Resources\volumeIconDefault.png" />
     <Resource Include="Resources\volumeIconBlack.png" />
     <Resource Include="Resources\volumeLowIconBlack.png" />
@@ -126,7 +117,6 @@
     <Resource Include="Resources\volumeMuteIconDefault.png" />
     <Resource Include="Resources\volumeOffIconBlack.png" />
     <Resource Include="Resources\volumeOffIconDefault.png" />
-    <Resource Include="Resources\controlsUp.png" />
   </ItemGroup>
 
 </Project>

@@ -42,8 +42,8 @@
         </Border>
         <Border Style="{StaticResource CairoWindowContainer}" Name="bdrMenuBar" Visibility="Collapsed" Padding="0,0,0,32">
             <DockPanel LastChildFill="True">
-                <Button HorizontalAlignment="Center" DockPanel.Dock="Bottom" Name="btnGoPage3" Content="{Binding sInterface_Continue}" Style="{StaticResource CairoButtonStyle}"
-                            Click="btnGoPage3_Click" IsDefault="True" />
+                <Button HorizontalAlignment="Center" DockPanel.Dock="Bottom" Name="btnFinish" Content="{Binding sWelcome_FinishTour}" Style="{StaticResource CairoButtonStyle}"
+                            Click="btnFinish_Click" IsDefault="True" />
                 <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Margin="0,0,0,5">
                     <StackPanel VerticalAlignment="Center" HorizontalAlignment="Left" Orientation="Vertical" Margin="0,54,0,0">
                         <TextBlock Style="{StaticResource WelcomeHeading}" Text="{Binding sWelcome_MenuBar}" />
@@ -51,56 +51,10 @@
                         <Image Source="Resources\Welcome\menuBar.png" Width="750" Height="98" Margin="0,0,0,15" RenderOptions.BitmapScalingMode="Fant" />
                         <TextBlock Style="{StaticResource WelcomeSubHeading}" Text="{Binding sWelcome_MenuBarSec1Heading}" />
                         <TextBlock Style="{StaticResource WelcomeSubText}" Text="{Binding sWelcome_MenuBarSec1Text}" />
-                        <TextBlock Style="{StaticResource WelcomeSubHeading}" Text="{Binding sWelcome_MenuBarSec2Heading}" />
-                        <TextBlock Style="{StaticResource WelcomeSubText}" Text="{Binding sWelcome_MenuBarSec2Text}" />
-                        <TextBlock Style="{StaticResource WelcomeSubHeading}" Text="{Binding sWelcome_MenuBarSec3Heading}" />
-                        <TextBlock Style="{StaticResource WelcomeSubText}" Text="{Binding sWelcome_MenuBarSec3Text}" />
-                        <TextBlock Style="{StaticResource WelcomeSubHeading}" Text="{Binding sWelcome_MenuBarSec4Heading}" />
-                        <TextBlock Style="{StaticResource WelcomeSubText}" Text="{Binding sWelcome_MenuBarSec4Text}" />
                         <TextBlock Style="{StaticResource WelcomeSubHeading}" Text="{Binding sWelcome_MenuBarSec5Heading}" />
                         <TextBlock Style="{StaticResource WelcomeSubText}" Text="{Binding sWelcome_MenuBarSec5Text}" />
                         <TextBlock Style="{StaticResource WelcomeSubHeading}" Text="{Binding sWelcome_MenuBarSec6Heading}" />
                         <TextBlock Style="{StaticResource WelcomeSubText}" Text="{Binding sWelcome_MenuBarSec6Text}" />
-                    </StackPanel>
-                </ScrollViewer>
-            </DockPanel>
-        </Border>
-        <Border Style="{StaticResource CairoWindowContainer}" Name="bdrDesktop" Visibility="Collapsed" Padding="0,0,0,32">
-            <DockPanel LastChildFill="True">
-                <Button HorizontalAlignment="Center" DockPanel.Dock="Bottom" Name="btnGoPage4" Content="{Binding sInterface_Continue}" Style="{StaticResource CairoButtonStyle}"
-                            Click="btnGoPage4_Click" IsDefault="True" />
-                <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Margin="0,0,0,5">
-                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Orientation="Vertical" Margin="0,54,0,0">
-                        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Left" Orientation="Vertical">
-                            <TextBlock Style="{StaticResource WelcomeHeading}" Text="{Binding sWelcome_DynamicDesktop}" />
-                            <TextBlock Style="{StaticResource WelcomeText}" Text="{Binding sWelcome_DesktopText}" />
-                            <TextBlock Style="{StaticResource WelcomeSubHeading}" Text="{Binding sWelcome_DesktopSec1Heading}" />
-                            <TextBlock Style="{StaticResource WelcomeSubText}" Text="{Binding sWelcome_DesktopSec1Text}" />
-                            <TextBlock Style="{StaticResource WelcomeSubHeading}" Text="{Binding sWelcome_DesktopSec2Heading}" />
-                            <TextBlock Style="{StaticResource WelcomeSubText}" Text="{Binding sWelcome_DesktopSec2Text}" />
-                        </StackPanel>
-                        <Image Source="Resources\Welcome\desktop.jpg" Width="430" Height="269" RenderOptions.BitmapScalingMode="Fant" />
-                    </StackPanel>
-                </ScrollViewer>
-            </DockPanel>
-        </Border>
-        <Border Style="{StaticResource CairoWindowContainer}" Name="bdrTaskbar" Visibility="Collapsed" Padding="0,0,0,32">
-            <DockPanel LastChildFill="True">
-                <Button HorizontalAlignment="Center" DockPanel.Dock="Bottom" Name="btnAppGrabber" Content="{Binding sWelcome_FinishTour}" Style="{StaticResource CairoButtonStyle}"
-                            Click="btnAppGrabber_Click" IsDefault="True" />
-                <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Margin="0,0,0,5">
-                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Orientation="Vertical" Margin="0,54,0,0">
-                        <Image Source="Resources\Welcome\taskbar.png" Width="686" Height="141" Margin="0,0,0,24" RenderOptions.BitmapScalingMode="Fant" />
-                        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Left" Orientation="Vertical">
-                            <TextBlock Style="{StaticResource WelcomeHeading}" Text="{Binding sWelcome_Taskbar}" />
-                            <TextBlock Style="{StaticResource WelcomeText}" Text="{Binding sWelcome_TaskbarText}" />
-                            <TextBlock Style="{StaticResource WelcomeSubHeading}" Text="{Binding sWelcome_TaskbarSec1Heading}" />
-                            <TextBlock Style="{StaticResource WelcomeSubText}" Text="{Binding sWelcome_TaskbarSec1Text}" />
-                            <TextBlock Style="{StaticResource WelcomeSubHeading}" Text="{Binding sWelcome_TaskbarSec2Heading}" />
-                            <TextBlock Style="{StaticResource WelcomeSubText}" Text="{Binding sWelcome_TaskbarSec2Text}" />
-                            <TextBlock Style="{StaticResource WelcomeSubHeading}" Text="{Binding sWelcome_TaskbarSec3Heading}" />
-                            <TextBlock Style="{StaticResource WelcomeSubText}" Text="{Binding sWelcome_TaskbarSec3Text}" />
-                        </StackPanel>
                     </StackPanel>
                 </ScrollViewer>
             </DockPanel>

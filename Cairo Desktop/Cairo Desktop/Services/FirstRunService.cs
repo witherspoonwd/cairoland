@@ -12,16 +12,14 @@ namespace CairoDesktop.Services
 {
     class FirstRunService : CairoBackgroundService
     {
-        private readonly IAppGrabber _appGrabber;
         private readonly ICairoApplication _cairoApplication;
         private readonly ILogger<FirstRunService> _logger;
         private readonly Settings _settings;
 
         private readonly bool _forceTour;
 
-        public FirstRunService(ICairoApplication cairoApplication, IAppGrabber appGrabber, ILogger<FirstRunService> logger, IOptionsMonitor<CommandLineOptions> options, Settings settings)
+        public FirstRunService(ICairoApplication cairoApplication, ILogger<FirstRunService> logger, IOptionsMonitor<CommandLineOptions> options, Settings settings)
         {
-            _appGrabber = appGrabber;
             _cairoApplication = cairoApplication;
             _logger = logger;
             _settings = settings;
@@ -51,7 +49,7 @@ namespace CairoDesktop.Services
 
         private void ShowWelcome()
         {
-            Welcome welcome = new Welcome(_cairoApplication, _appGrabber, _settings);
+            Welcome welcome = new Welcome(_cairoApplication, _settings);
             welcome.Show();
         }
     }
