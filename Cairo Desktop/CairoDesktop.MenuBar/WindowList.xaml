@@ -11,7 +11,7 @@
                   Margin="0,0,6,0">
         <ItemsControl.ItemsPanel>
             <ItemsPanelTemplate>
-                <control:WindowListPanel MaxItemWidth="200" />
+                <control:WindowListPanel />
             </ItemsPanelTemplate>
         </ItemsControl.ItemsPanel>
         <ItemsControl.ItemTemplate>

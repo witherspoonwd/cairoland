@@ -5,6 +5,18 @@ using System.Windows.Input;
 
 namespace CairoDesktop.Tiling
 {
+    public enum KeyBindingScope
+    {
+        /// <summary>Only while the window manager is enabled.</summary>
+        Tiling,
+
+        /// <summary>Only while Cairo is the shell (Explorer provides these otherwise).</summary>
+        Shell,
+
+        /// <summary>While the window manager is enabled or Cairo is the shell.</summary>
+        Any
+    }
+
     public class KeyBinding
     {
         public Key Key { get; }
@@ -16,8 +28,14 @@ namespace CairoDesktop.Tiling
 
         public (string name, object value)[] Parameters { get; }
 
+        public KeyBindingScope Scope { get; }
+
         public KeyBinding(Key key, HotKeyModifier extraModifiers, string commandId, params (string name, object value)[] parameters)
+            : this(KeyBindingScope.Tiling, key, extraModifiers, commandId, parameters) { }
+
+        public KeyBinding(KeyBindingScope scope, Key key, HotKeyModifier extraModifiers, string commandId, params (string name, object value)[] parameters)
         {
+            Scope = scope;
             Key = key;
             ExtraModifiers = extraModifiers;
             CommandId = commandId;
@@ -28,7 +46,7 @@ namespace CairoDesktop.Tiling
     }
 
     /// <summary>
-    /// The default key bindings, in one place. Not user-configurable in v1.
+    /// The built-in key bindings. User shortcuts (Settings.SuperKeyShortcuts) override any that collide.
     /// </summary>
     public static class TilingKeymap
     {
@@ -84,9 +102,11 @@ namespace CairoDesktop.Tiling
             bindings.Add(new KeyBinding(Key.OemPeriod, None, "TilingFocusScreen", ("Next", true)));
             bindings.Add(new KeyBinding(Key.OemComma, None, "TilingFocusScreen", ("Next", false)));
             bindings.Add(new KeyBinding(Key.O, None, "TilingMoveToScreen", ("Next", true)));
-            bindings.Add(new KeyBinding(Key.Enter, None, "TilingLaunchTerminal"));
-            bindings.Add(new KeyBinding(Key.R, None, "ToggleProgramLauncher"));
             bindings.Add(new KeyBinding(Key.R, Ctrl, "RestartCairo"));
+
+            bindings.Add(new KeyBinding(KeyBindingScope.Any, Key.R, None, "ToggleProgramLauncher"));
+            bindings.Add(new KeyBinding(KeyBindingScope.Shell, Key.I, None, "OpenControlPanel"));
+            bindings.Add(new KeyBinding(KeyBindingScope.Shell, Key.Pause, None, "RunCommand", ("Command", "control.exe system")));
 
             return bindings;
         }
@@ -106,6 +126,41 @@ namespace CairoDesktop.Tiling
             }
 
             return modifiers == HotKeyModifier.None ? HotKeyModifier.Win : modifiers;
+        }
+
+        /// <summary>A readable key combo, e.g. "Win+Shift+1".</summary>
+        public static string FormatCombo(Key key, HotKeyModifier modifiers)
+        {
+            return FormatModifiers(modifiers) + FormatKey(key);
+        }
+
+        /// <summary>The modifiers with a trailing "+", e.g. "Alt+Win+".</summary>
+        public static string FormatModifiers(HotKeyModifier modifiers)
+        {
+            string text = "";
+            if ((modifiers & HotKeyModifier.Win) != 0) text += "Win+";
+            if ((modifiers & HotKeyModifier.Ctrl) != 0) text += "Ctrl+";
+            if ((modifiers & HotKeyModifier.Alt) != 0) text += "Alt+";
+            if ((modifiers & HotKeyModifier.Shift) != 0) text += "Shift+";
+            return text;
+        }
+
+        private static string FormatKey(Key key)
+        {
+            if (key >= Key.D0 && key <= Key.D9)
+            {
+                return ((int)(key - Key.D0)).ToString();
+            }
+
+            switch (key)
+            {
+                case Key.Return: return "Enter";
+                case Key.Escape: return "Esc";
+                case Key.OemPeriod: return ".";
+                case Key.OemComma: return ",";
+                case Key.Back: return "Backspace";
+                default: return key.ToString();
+            }
         }
     }
 }

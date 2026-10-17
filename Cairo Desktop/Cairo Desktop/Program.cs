@@ -40,6 +40,12 @@ namespace CairoDesktop
         [STAThread]
         public static int Main(string[] args)
         {
+            // before the single instance check, so the copy can take the mutex
+            if (UIAccessLauncher.TryHandOff(args))
+            {
+                return 1;
+            }
+
             if (!SingleInstanceCheck())
             {
                 return 1;
@@ -67,7 +73,6 @@ namespace CairoDesktop
 
                     services.AddHostedService<MenuBarHotKeyService>();
                     services.AddHostedService<MenuExtraHotKeyService>();
-                    services.AddHostedService<ShellHotKeyService>();
 
                     services.AddSingleton<IThemeService, CairoApplicationThemeService>();
 
@@ -80,7 +85,8 @@ namespace CairoDesktop
                     services.AddSingleton<ProgramIndex>();
                     services.AddSingleton<LaunchHistory>();
                     services.AddHostedService<TilingService>();
-                    services.AddHostedService<TilingHotKeyService>();
+                    services.AddSingleton<TilingHotKeyService>();
+                    services.AddHostedService(provider => provider.GetRequiredService<TilingHotKeyService>());
 
 #if ENABLEFIRSTRUN
                     services.AddHostedService<FirstRunService>();
@@ -149,6 +155,8 @@ namespace CairoDesktop
                     services.AddSingleton<ICairoCommand, TilingFocusScreenCommand>();
                     services.AddSingleton<ICairoCommand, TilingMoveToScreenCommand>();
                     services.AddSingleton<ICairoCommand, TilingLaunchTerminalCommand>();
+                    services.AddSingleton<ICairoCommand, CloseActiveWindowCommand>();
+                    services.AddSingleton<ICairoCommand, RunCommandCommand>();
                     services.AddSingleton<ICairoCommand, RestartCairoCommand>();
                     services.AddSingleton<ICairoCommand, DisplayProjectionCommand>();
                     services.AddSingleton<ICairoCommand, ToggleProgramLauncherCommand>();

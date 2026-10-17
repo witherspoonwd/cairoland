@@ -20,14 +20,7 @@
     <!-- Menu resources -->
     <system:Boolean x:Key="MenuBarWindowAllowsTransparency">True</system:Boolean>
     <SolidColorBrush Color="#00FFFFFF" x:Key="MenuBarWindowStyleBackground" />
-    <LinearGradientBrush StartPoint="0,0"
-                         EndPoint="0,1"
-                         x:Key="MenuBarBackground">
-        <GradientStop Color="#CF000000"
-                      Offset="0.0" />
-        <GradientStop Color="#8F4a4a4a"
-                      Offset="1.0" />
-    </LinearGradientBrush>
+    <SolidColorBrush Color="#CF1a1a1a" x:Key="MenuBarBackground" />
     <LinearGradientBrush StartPoint="0,0"
                          EndPoint="0,1"
                          x:Key="MenuBackgroundGradient">

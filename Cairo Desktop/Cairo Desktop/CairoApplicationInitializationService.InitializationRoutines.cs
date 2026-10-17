@@ -1,4 +1,5 @@
 ﻿using CairoDesktop.Application.Interfaces;
+using CairoDesktop.Common;
 using CairoDesktop.Infrastructure.ObjectModel;
 using CairoDesktop.Infrastructure.Options;
 using ManagedShell.Common.Helpers;
@@ -47,6 +48,7 @@ namespace CairoDesktop
 
             // check if there is an existing shell window. If not, we will assume the role of shell.
             EnvironmentHelper.IsAppRunningAsShell = (NativeMethods.GetShellWindow() == IntPtr.Zero && !forceNoShell) || forceShell;
+            _logger.LogInformation($"Running as shell: {EnvironmentHelper.IsAppRunningAsShell}; UI access: {UIAccess.IsActive}");
         }
 
         void IInitializationService.LoadCommands()

@@ -27,6 +27,7 @@ namespace CairoDesktop.Tiling
         private readonly WinEventListener _listener = new WinEventListener();
         private readonly FocusFollowsMouse _focusFollowsMouse;
         private readonly WorkstationLockManager _lockManager;
+        private readonly WindowAnimations _animations;
 
         private readonly List<MonitorState> _monitors = new List<MonitorState>();
         private readonly Dictionary<IntPtr, ManagedWindow> _windows = new Dictionary<IntPtr, ManagedWindow>();
@@ -48,6 +49,7 @@ namespace CairoDesktop.Tiling
             _journal = journal;
             _lockManager = lockManager;
             _arranger = new WindowArranger(journal);
+            _animations = new WindowAnimations(journal);
             _filter = new WindowFilter(settings);
             _focusFollowsMouse = new FocusFollowsMouse(settings, hwnd => _windows.ContainsKey(hwnd));
 
@@ -87,6 +89,7 @@ namespace CairoDesktop.Tiling
 
             _logger.LogInformation("Starting tiling window manager");
             _journal.RestoreAll();
+            _animations.Suppress();
 
             BuildMonitors();
 
@@ -114,6 +117,11 @@ namespace CairoDesktop.Tiling
 
             _listener.Start();
             _lockManager.Enable();
+            if (_lockManager.IsUnavailable)
+            {
+                // after startup settles, so the prompt isn't buried behind restored windows
+                _dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() => LockPolicyPrompt.ShowIfNeeded(_lockManager)));
+            }
             _focusFollowsMouse.Enable();
 
             foreach (MonitorState monitor in _monitors)
@@ -147,6 +155,7 @@ namespace CairoDesktop.Tiling
                 }
             }
 
+            _animations.Restore();
             _journal.RestoreAll();
 
             foreach (MonitorState monitor in _monitors)
@@ -184,6 +193,7 @@ namespace CairoDesktop.Tiling
                 // best effort; the journal restore below matters more
             }
 
+            // the journal restores window animations too
             _journal.RestoreAll();
         }
 

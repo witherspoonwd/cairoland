@@ -467,7 +467,6 @@ namespace CairoDesktop.Common.Localization
 
         public static string sSettings_MenuBar_EnableMenuBarBlur => getString();
 
-        public static string sSettings_MenuBar_EnableMenuBarMultiMon => getString();
 
         public static string sSettings_MenuBar_ShowHibernate => getString();
 
@@ -671,6 +670,10 @@ namespace CairoDesktop.Common.Localization
 
         public static string sCommand_RestartCairo => getString();
 
+        public static string sCommand_CloseActiveWindow => getString();
+
+        public static string sCommand_RunCommand => getString();
+
         public static string sWindowManager => getString();
 
         public static string sWindowManager_EnableTiling => getString();
@@ -719,9 +722,67 @@ namespace CairoDesktop.Common.Localization
 
         public static string sSettings_Tiling_RemapWinLUnavailable => getString();
 
+        public static string sSettings_Tiling_RemapWinLFix => getString();
+
+        public static string sLockFix_Title => getString();
+
+        public static string sLockFix_Message => getString();
+
+        public static string sLockFix_Fix => getString();
+
+        public static string sLockFix_NotNow => getString();
+
+        public static string sLockFix_Fixed => getString();
+
+        public static string sLockFix_Failed => getString();
+
+        public static string sSettings_Shortcuts => getString();
+
+        public static string sSettings_Shortcuts_Help => getString();
+
+        public static string sSettings_Shortcuts_Key => getString();
+
+        public static string sSettings_Shortcuts_Action => getString();
+
+        public static string sSettings_Shortcuts_Value => getString();
+
+        public static string sSettings_Shortcuts_Add => getString();
+
+        public static string sSettings_Shortcuts_Reset => getString();
+
+        public static string sSettings_Shortcuts_Remove => getString();
+
+        public static string sSettings_Shortcuts_Yours => getString();
+
+        public static string sSettings_Shortcuts_BuiltIn => getString();
+
+        public static string sShortcutState_Active => getString();
+
+        public static string sShortcutState_Hooked => getString();
+
+        public static string sShortcutState_Replaces => getString();
+
+        public static string sShortcutState_Overridden => getString();
+
+        public static string sShortcutState_Duplicate => getString();
+
+        public static string sShortcutState_Incomplete => getString();
+
+        public static string sShortcutState_NeedsValue => getString();
+
+        public static string sShortcutState_LockKey => getString();
+
+        public static string sShortcutState_InactiveTiling => getString();
+
+        public static string sShortcutState_InactiveShell => getString();
+
+        public static string sShortcutState_Inactive => getString();
+
         public static string sSettings_Tiling_ExplorerHotkeysHelp => getString();
 
         public static string sSettings_Tiling_ElevatedHelp => getString();
+
+        public static string sSettings_Tiling_ElevatedHelpUIAccess => getString();
 
         public static string sSettings_Tiling_Behavior => getString();
 

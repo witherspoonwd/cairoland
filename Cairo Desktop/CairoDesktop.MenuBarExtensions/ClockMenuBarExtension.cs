@@ -48,18 +48,11 @@ namespace CairoDesktop.MenuBarExtensions
         {
             foreach (Clock clock in _clocks)
             {
-                if (_settings.EnableMenuBarMultiMon)
+                if (CursorHelper.IsCursorOnScreen(System.Windows.Forms.Screen.FromHandle(clock.Host.GetHandle())))
                 {
-                    if (CursorHelper.IsCursorOnScreen(System.Windows.Forms.Screen.FromHandle(clock.Host.GetHandle())))
-                    {
-                        clock.ToggleClockDisplay();
-                        return;
-                    }
-
-                    continue;
+                    clock.ToggleClockDisplay();
+                    return;
                 }
-
-                clock.ToggleClockDisplay();
             }
         }
 

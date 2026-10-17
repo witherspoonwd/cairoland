@@ -21,7 +21,8 @@ namespace CairoDesktop.MenuBar.Services
             _commandService = commandService;
             _tilingManager = tilingManager;
 
-            EnableMultiMon = _settings.EnableMenuBarMultiMon;
+            // tags are per screen, so every screen always gets its own bar
+            EnableMultiMon = true;
             EnableService = _settings.EnableMenuBar;
         }
 
@@ -31,9 +32,6 @@ namespace CairoDesktop.MenuBar.Services
             {
                 case "EnableMenuBar":
                     HandleEnableServiceChanged(_settings.EnableMenuBar);
-                    break;
-                case "EnableMenuBarMultiMon":
-                    HandleEnableMultiMonChanged(_settings.EnableMenuBarMultiMon);
                     break;
             }
         }

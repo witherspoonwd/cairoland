@@ -15,12 +15,13 @@ namespace CairoDesktop.Services
         private readonly IThemeService _themeService;
         private readonly IApplicationUpdateService _updateService;
         private readonly WorkstationLockManager _lockManager;
+        private readonly TilingHotKeyService _hotKeyService;
         private readonly Settings _settings;
 
         internal SettingsUI SettingsUi;
 
         public SettingsUIService(ICairoApplication cairoApplication, IAppGrabber appGrabber, IApplicationUpdateService updateService,
-            ShellManagerService shellManager, IThemeService themeService, ICommandService commandService, WorkstationLockManager lockManager, Settings settings)
+            ShellManagerService shellManager, IThemeService themeService, ICommandService commandService, WorkstationLockManager lockManager, TilingHotKeyService hotKeyService, Settings settings)
         {
             _appGrabber = appGrabber;
             _cairoApplication = cairoApplication;
@@ -29,6 +30,7 @@ namespace CairoDesktop.Services
             _themeService = themeService;
             _updateService = updateService;
             _lockManager = lockManager;
+            _hotKeyService = hotKeyService;
             _settings = settings;
         }
 
@@ -36,7 +38,7 @@ namespace CairoDesktop.Services
         {
             if (SettingsUi == null)
             {
-                SettingsUi = new SettingsUI(_cairoApplication, this, _shellManager, _updateService, _appGrabber, _themeService, _commandService, _lockManager, _settings);
+                SettingsUi = new SettingsUI(_cairoApplication, this, _shellManager, _updateService, _appGrabber, _themeService, _commandService, _lockManager, _hotKeyService, _settings);
             }
 
             SettingsUi.Show();
@@ -53,6 +55,9 @@ namespace CairoDesktop.Services
             {
                 case "tiling":
                     SettingsUi.TabTiling.IsSelected = true;
+                    break;
+                case "shortcuts":
+                    SettingsUi.TabShortcuts.IsSelected = true;
                     break;
             }
         }

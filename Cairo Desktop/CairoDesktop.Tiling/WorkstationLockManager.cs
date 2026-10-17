@@ -3,7 +3,13 @@ using CairoDesktop.Interop;
 using ManagedShell.Common.Logging;
 using Microsoft.Win32;
 using System;
+using System.ComponentModel;
+using System.Diagnostics;
 using System.Security;
+using System.Security.Principal;
+using System.Text;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using System.Windows.Threading;
 
 namespace CairoDesktop.Tiling
@@ -21,6 +27,9 @@ namespace CairoDesktop.Tiling
         private readonly Settings _settings;
         private readonly HiddenWindowJournal _journal;
         private DispatcherTimer _relockTimer;
+
+        // true between Enable and Disable, i.e. while tiling wants Win+L, even if the remap failed
+        private bool _enableRequested;
 
         /// <summary>True while Win+L does not lock, so it can be bound.</summary>
         public bool IsRemapActive { get; private set; }
@@ -42,6 +51,8 @@ namespace CairoDesktop.Tiling
 
         public void Enable()
         {
+            _enableRequested = true;
+
             if (IsRemapActive || !_settings.RemapWinL)
             {
                 return;
@@ -84,6 +95,7 @@ namespace CairoDesktop.Tiling
 
         public void Disable()
         {
+            _enableRequested = false;
             _relockTimer?.Stop();
             _relockTimer = null;
 
@@ -130,6 +142,87 @@ namespace CairoDesktop.Tiling
             }
 
             User32.LockWorkStation();
+        }
+
+        /// <summary>
+        /// Windows' default ACL makes HKCU\...\Policies read-only for standard users. With administrator approval
+        /// (UAC), creates the System key for the current user and grants them full control of it, then retries
+        /// <see cref="Enable"/>. Returns false if the user cancels UAC or the fix fails.
+        /// </summary>
+        public async Task<bool> FixPolicyAccessAsync()
+        {
+            string sid = WindowsIdentity.GetCurrent().User?.Value;
+            if (sid == null || !Regex.IsMatch(sid, @"^S-[0-9-]+$"))
+            {
+                ShellLogger.Warning("WorkstationLockManager: Unable to determine the current user's SID");
+                return false;
+            }
+
+            // HKEY_USERS\<sid> instead of HKCU, so it still targets this user if a different admin approves UAC
+            string script = $@"
+$ErrorActionPreference = 'Stop'
+$sid = New-Object System.Security.Principal.SecurityIdentifier('{sid}')
+$key = [Microsoft.Win32.Registry]::Users.CreateSubKey('{sid}\{PolicyKeyPath}')
+$key.Close()
+$key = [Microsoft.Win32.Registry]::Users.OpenSubKey('{sid}\{PolicyKeyPath}', [Microsoft.Win32.RegistryKeyPermissionCheck]::ReadWriteSubTree, [System.Security.AccessControl.RegistryRights]'ReadKey, ChangePermissions')
+$acl = $key.GetAccessControl([System.Security.AccessControl.AccessControlSections]::Access)
+foreach ($rule in @($acl.GetAccessRules($true, $false, [System.Security.Principal.SecurityIdentifier]))) {{
+    if ($rule.AccessControlType -eq 'Deny' -and $rule.IdentityReference -eq $sid) {{ [void]$acl.RemoveAccessRuleSpecific($rule) }}
+}}
+$acl.AddAccessRule((New-Object System.Security.AccessControl.RegistryAccessRule($sid, 'FullControl', 'ContainerInherit', 'None', 'Allow')))
+$key.SetAccessControl($acl)
+$key.Close()
+";
+
+            ProcessStartInfo startInfo = new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand " + Convert.ToBase64String(Encoding.Unicode.GetBytes(script)),
+                UseShellExecute = true,
+                Verb = "runas",
+                WindowStyle = ProcessWindowStyle.Hidden
+            };
+
+            int exitCode;
+            try
+            {
+                exitCode = await Task.Run(() =>
+                {
+                    using (Process process = Process.Start(startInfo))
+                    {
+                        process.WaitForExit();
+                        return process.ExitCode;
+                    }
+                });
+            }
+            catch (Win32Exception ex) when (ex.NativeErrorCode == 1223)
+            {
+                ShellLogger.Info("WorkstationLockManager: Lock policy fix cancelled at the UAC prompt");
+                return false;
+            }
+            catch (Exception ex)
+            {
+                ShellLogger.Warning($"WorkstationLockManager: Unable to run the lock policy fix: {ex.Message}");
+                return false;
+            }
+
+            if (exitCode != 0)
+            {
+                ShellLogger.Warning($"WorkstationLockManager: Lock policy fix failed with exit code {exitCode}");
+                return false;
+            }
+
+            ShellLogger.Info("WorkstationLockManager: Lock policy key is now writable");
+            IsUnavailable = false;
+
+            if (_enableRequested)
+            {
+                Enable();
+                return IsRemapActive;
+            }
+
+            OnStateChanged();
+            return true;
         }
 
         private void RelockTimer_Tick(object sender, EventArgs e)

@@ -39,7 +39,7 @@ namespace CairoDesktop.MenuBar.Commands
 
             foreach (MenuBar menuBar in _windowService.Windows)
             {
-                if (!_settings.EnableMenuBarMultiMon || CursorHelper.IsCursorOnScreen(menuBar.Screen))
+                if (CursorHelper.IsCursorOnScreen(menuBar.Screen))
                 {
                     menuBar.ToggleCairoMenu();
                     return true;

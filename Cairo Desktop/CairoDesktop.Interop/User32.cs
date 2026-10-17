@@ -86,6 +86,18 @@ namespace CairoDesktop.Interop
             public IntPtr dwExtraInfo;
         }
 
+        [StructLayout(LayoutKind.Sequential)]
+        public struct ANIMATIONINFO
+        {
+            public uint cbSize;
+            public int iMinAnimate;
+
+            public static ANIMATIONINFO Create()
+            {
+                return new ANIMATIONINFO { cbSize = (uint)Marshal.SizeOf(typeof(ANIMATIONINFO)) };
+            }
+        }
+
         #endregion
 
         #region Constants
@@ -151,6 +163,10 @@ namespace CairoDesktop.Interop
         // messages
         public const uint WM_CLOSE = 0x0010;
         public const uint WM_GETICON = 0x007F;
+        public const uint WM_SYSCOMMAND = 0x0112;
+
+        // WM_SYSCOMMAND commands
+        public const int SC_CLOSE = 0xF060;
 
         // WM_GETICON types
         public const int ICON_SMALL = 0;
@@ -194,6 +210,11 @@ namespace CairoDesktop.Interop
         public const uint SPI_SETACTIVEWNDTRKZORDER = 0x100D;
         public const uint SPI_GETACTIVEWNDTRKTIMEOUT = 0x2002;
         public const uint SPI_SETACTIVEWNDTRKTIMEOUT = 0x2003;
+        public const uint SPI_GETANIMATION = 0x0048;
+        public const uint SPI_SETANIMATION = 0x0049;
+
+        // SystemParametersInfo flags
+        public const uint SPIF_SENDCHANGE = 0x0002;
 
         // SendInput
         public const uint INPUT_KEYBOARD = 1;
@@ -334,6 +355,9 @@ namespace CairoDesktop.Interop
         public static extern IntPtr GetForegroundWindow();
 
         [DllImport(User32_DllName)]
+        public static extern IntPtr GetShellWindow();
+
+        [DllImport(User32_DllName)]
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool SetForegroundWindow(IntPtr hWnd);
 
@@ -424,6 +448,13 @@ namespace CairoDesktop.Interop
         [DllImport(User32_DllName, SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool SystemParametersInfo(uint uiAction, uint uiParam, IntPtr pvParam, uint fWinIni);
+
+        /// <summary>
+        /// For SPI_GETANIMATION / SPI_SETANIMATION; uiParam is the struct size.
+        /// </summary>
+        [DllImport(User32_DllName, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool SystemParametersInfo(uint uiAction, uint uiParam, ref ANIMATIONINFO pvParam, uint fWinIni);
 
         #endregion
 

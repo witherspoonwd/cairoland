@@ -5,13 +5,17 @@ using System.Windows.Controls;
 namespace CairoDesktop.MenuBar
 {
     /// <summary>
-    /// Lays children out in one row, sharing the available width equally up to <see cref="MaxItemWidth"/>.
+    /// Lays children out in one row, dividing the available width equally between them (capped at
+    /// <see cref="MaxItemWidth"/>, which is unbounded by default).
     /// </summary>
     public class WindowListPanel : Panel
     {
+        // used only when the panel is measured with unbounded width
+        private const double UnboundedItemWidth = 200;
+
         public static readonly DependencyProperty MaxItemWidthProperty = DependencyProperty.Register(
             nameof(MaxItemWidth), typeof(double), typeof(WindowListPanel),
-            new FrameworkPropertyMetadata(200.0, FrameworkPropertyMetadataOptions.AffectsMeasure));
+            new FrameworkPropertyMetadata(double.PositiveInfinity, FrameworkPropertyMetadataOptions.AffectsMeasure));
 
         public double MaxItemWidth
         {
@@ -29,7 +33,7 @@ namespace CairoDesktop.MenuBar
 
             if (double.IsInfinity(available))
             {
-                return MaxItemWidth;
+                return Math.Min(MaxItemWidth, UnboundedItemWidth);
             }
 
             return Math.Max(0, Math.Min(MaxItemWidth, Math.Floor(available / count)));

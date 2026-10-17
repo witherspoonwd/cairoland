@@ -7,6 +7,7 @@ namespace CairoDesktop.Interop
     {
         const string Dwmapi_DllName = "dwmapi.dll";
 
+        public const int DWMWA_TRANSITIONS_FORCEDISABLED = 3;
         public const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
         public const int DWMWA_CLOAKED = 14;
 
@@ -15,6 +16,25 @@ namespace CairoDesktop.Interop
 
         [DllImport(Dwmapi_DllName)]
         public static extern int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out int pvAttribute, int cbAttribute);
+
+        [DllImport(Dwmapi_DllName)]
+        public static extern int DwmSetWindowAttribute(IntPtr hwnd, int dwAttribute, ref int pvAttribute, int cbAttribute);
+
+        /// <summary>
+        /// Turns off DWM show/hide transitions for a window. Best effort: DWM may refuse for other processes' windows.
+        /// </summary>
+        public static bool DisableTransitions(IntPtr hwnd)
+        {
+            try
+            {
+                int disabled = 1;
+                return DwmSetWindowAttribute(hwnd, DWMWA_TRANSITIONS_FORCEDISABLED, ref disabled, sizeof(int)) == 0;
+            }
+            catch (DllNotFoundException)
+            {
+                return false;
+            }
+        }
 
         public static bool IsCloaked(IntPtr hwnd)
         {

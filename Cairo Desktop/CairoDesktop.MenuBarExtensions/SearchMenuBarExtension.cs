@@ -127,18 +127,11 @@ namespace CairoDesktop.MenuBarExtensions
         {
             foreach (Search search in _searchList)
             {
-                if (_settings.EnableMenuBarMultiMon)
+                if (CursorHelper.IsCursorOnScreen(System.Windows.Forms.Screen.FromHandle(search.Host.GetHandle())))
                 {
-                    if (CursorHelper.IsCursorOnScreen(System.Windows.Forms.Screen.FromHandle(search.Host.GetHandle())))
-                    {
-                        search.ToggleSearch();
-                        return;
-                    }
-
-                    continue;
+                    search.ToggleSearch();
+                    return;
                 }
-
-                search.ToggleSearch();
             }
         }
     }

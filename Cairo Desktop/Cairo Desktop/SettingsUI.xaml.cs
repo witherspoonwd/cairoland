@@ -1,6 +1,8 @@
 ﻿using CairoDesktop.AppGrabber;
 using CairoDesktop.Application.Interfaces;
+using CairoDesktop.Application.Structs;
 using CairoDesktop.Common;
+using CairoDesktop.Common.Localization;
 using ManagedShell.Interop;
 using CairoDesktop.SupportingClasses;
 using ManagedShell;
@@ -8,6 +10,7 @@ using ManagedShell.WindowsTray;
 using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Drawing.Imaging;
 using System.IO;
 using System.IO.Compression;
@@ -41,6 +44,7 @@ namespace CairoDesktop
         private readonly IThemeService _themeService;
         private readonly SettingsUIService _uiService;
         private readonly WorkstationLockManager _lockManager;
+        private readonly TilingHotKeyService _hotKeyService;
         private readonly Settings _settings;
 
         internal SettingsUI(ICairoApplication cairoApplication,
@@ -51,6 +55,7 @@ namespace CairoDesktop
             IThemeService themeService,
             ICommandService commandService,
             WorkstationLockManager lockManager,
+            TilingHotKeyService hotKeyService,
             Settings settings)
         {
             InitializeComponent();
@@ -63,6 +68,7 @@ namespace CairoDesktop
             _themeService = themeService;
             _uiService = uiService;
             _lockManager = lockManager;
+            _hotKeyService = hotKeyService;
             _settings = settings;
 
             DataContext = _settings;
@@ -73,6 +79,7 @@ namespace CairoDesktop
             loadHotKeys();
             loadLoggingLevels();
             loadTilingSettings();
+            loadShortcutSettings();
             loadNotificationSettings();
             loadVersionDependentSettings();
 
@@ -168,8 +175,266 @@ namespace CairoDesktop
             cboFocusFollowsMouseMode.Items.Add("Native");
             cboFocusFollowsMouseMode.Items.Add("Polling");
 
-            txtRemapWinLUnavailable.Visibility = _lockManager.IsUnavailable ? Visibility.Visible : Visibility.Collapsed;
+            updateRemapWinLUnavailable();
+            _lockManager.StateChanged += LockManager_StateChanged;
+
+            if (UIAccess.IsActive)
+            {
+                txtElevatedHelp.Text = DisplayString.sSettings_Tiling_ElevatedHelpUIAccess;
+            }
         }
+
+        private void LockManager_StateChanged(object sender, EventArgs e)
+        {
+            Dispatcher.BeginInvoke(new Action(updateRemapWinLUnavailable));
+        }
+
+        private void updateRemapWinLUnavailable()
+        {
+            pnlRemapWinLUnavailable.Visibility = _lockManager.IsUnavailable ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private void btnRemapWinLFix_OnClick(object sender, RoutedEventArgs e)
+        {
+            LockPolicyPrompt.Show(_lockManager);
+        }
+
+        #region Shortcuts
+
+        private static readonly string[] shortcutKeyNames = buildShortcutKeyNames();
+
+        private static string[] buildShortcutKeyNames()
+        {
+            List<string> keys = new List<string>();
+            for (char c = 'A'; c <= 'Z'; c++) keys.Add(c.ToString());
+            for (int i = 0; i <= 9; i++) keys.Add(i.ToString());
+            for (int i = 1; i <= 12; i++) keys.Add("F" + i);
+            keys.AddRange(new[] { "Enter", "Space", "Tab", "Back", "Escape", "Delete", "Insert", "Home", "End", "PageUp", "PageDown", "Left", "Right", "Up", "Down", "Pause", "OemComma", "OemPeriod" });
+            return keys.ToArray();
+        }
+
+        private readonly ObservableCollection<ShortcutRow> shortcutRows = new ObservableCollection<ShortcutRow>();
+
+        public string[] ShortcutKeys => shortcutKeyNames;
+
+        public List<ShortcutAction> ShortcutActions { get; private set; }
+
+        private void loadShortcutSettings()
+        {
+            // commands that take at most one value can be bound; that value comes from the row's Value box
+            ShortcutActions = _commandService.Commands
+                .Where(command => (command.Parameters?.Count(p => p.IsRequired) ?? 0) <= 1)
+                .Select(command =>
+                {
+                    // same choice as the hotkey service: the first required parameter, else the first one
+                    string valueHint = null;
+                    bool valueRequired = false;
+                    List<CairoCommandParameter> parameters = command.Parameters?.ToList() ?? new List<CairoCommandParameter>();
+                    if (parameters.Count > 0)
+                    {
+                        CairoCommandParameter parameter = parameters.FirstOrDefault(p => p.IsRequired);
+                        if (parameter.Name == null)
+                        {
+                            parameter = parameters[0];
+                        }
+
+                        valueHint = parameter.Description ?? parameter.Name;
+                        valueRequired = parameter.IsRequired;
+                    }
+
+                    return new ShortcutAction
+                    {
+                        Id = command.Identifier,
+                        Label = string.IsNullOrEmpty(command.Label) ? command.Identifier : command.Label,
+                        ValueHint = valueHint,
+                        ValueRequired = valueRequired
+                    };
+                })
+                .OrderBy(action => action.Label, StringComparer.CurrentCultureIgnoreCase)
+                .ToList();
+
+            loadShortcutRows();
+            lstShortcuts.ItemsSource = shortcutRows;
+
+            _hotKeyService.EntriesChanged += HotKeyService_EntriesChanged;
+            updateShortcutStatus();
+        }
+
+        private void HotKeyService_EntriesChanged(object sender, EventArgs e)
+        {
+            updateShortcutStatus();
+        }
+
+        /// <summary>
+        /// Shows what each shortcut and built-in key does right now, from the hotkey service's last registration.
+        /// </summary>
+        private void updateShortcutStatus()
+        {
+            string prefix = TilingKeymap.FormatModifiers(TilingKeymap.ParseBaseModifier(_settings.TilingModifier)).TrimEnd('+') + " +";
+            List<BuiltInKeyRow> builtIns = new List<BuiltInKeyRow>();
+
+            foreach (HotKeyEntry entry in _hotKeyService.Entries)
+            {
+                if (entry.IsShortcut)
+                {
+                    if (entry.ShortcutIndex < shortcutRows.Count)
+                    {
+                        ShortcutRow row = shortcutRows[entry.ShortcutIndex];
+                        row.ModifierPrefix = prefix;
+                        row.Status = getShortcutStatus(entry, row, out bool isLive);
+                        row.IsLive = isLive;
+                    }
+
+                    continue;
+                }
+
+                builtIns.Add(new BuiltInKeyRow
+                {
+                    Combo = entry.Combo,
+                    Action = describeCommand(entry.CommandId, entry.Parameters),
+                    Status = getBuiltInStatus(entry),
+                    IsLive = entry.IsLive
+                });
+            }
+
+            lstBuiltInKeys.ItemsSource = builtIns;
+        }
+
+        private string getShortcutStatus(HotKeyEntry entry, ShortcutRow row, out bool isLive)
+        {
+            isLive = false;
+            switch (entry.State)
+            {
+                case HotKeyState.Incomplete:
+                    return DisplayString.sShortcutState_Incomplete;
+                case HotKeyState.Duplicate:
+                    return DisplayString.sShortcutState_Duplicate;
+                case HotKeyState.LockKey:
+                    return DisplayString.sShortcutState_LockKey;
+                case HotKeyState.Inactive:
+                    return DisplayString.sShortcutState_Inactive;
+            }
+
+            if (row.IsMissingValue)
+            {
+                return string.Format(DisplayString.sShortcutState_NeedsValue, row.ValueHint);
+            }
+
+            isLive = true;
+            string status = entry.State == HotKeyState.Hooked ? DisplayString.sShortcutState_Hooked : DisplayString.sShortcutState_Active;
+            if (entry.Replaces.Count > 0)
+            {
+                status += " · " + string.Format(DisplayString.sShortcutState_Replaces,
+                    string.Join(", ", entry.Replaces.Select(replaced => describeCommand(replaced.CommandId, replaced.Parameters))));
+            }
+
+            return status;
+        }
+
+        private string getBuiltInStatus(HotKeyEntry entry)
+        {
+            switch (entry.State)
+            {
+                case HotKeyState.Active:
+                    return DisplayString.sShortcutState_Active;
+                case HotKeyState.Hooked:
+                    return DisplayString.sShortcutState_Hooked;
+                case HotKeyState.Overridden:
+                    return DisplayString.sShortcutState_Overridden;
+                case HotKeyState.LockKey:
+                    return DisplayString.sShortcutState_LockKey;
+                default:
+                    return entry.Binding?.Scope == KeyBindingScope.Shell ? DisplayString.sShortcutState_InactiveShell
+                        : entry.Binding?.Scope == KeyBindingScope.Tiling ? DisplayString.sShortcutState_InactiveTiling
+                        : DisplayString.sShortcutState_Inactive;
+            }
+        }
+
+        /// <summary>The command's label, plus its parameter values, e.g. "View tag (3)".</summary>
+        private string describeCommand(string commandId, (string name, object value)[] parameters)
+        {
+            string label = ShortcutActions.FirstOrDefault(action => action.Id == commandId)?.Label
+                ?? _commandService.Commands.FirstOrDefault(command => command.Identifier == commandId)?.Label
+                ?? commandId;
+
+            List<string> values = new List<string>();
+            foreach (var parameter in parameters ?? new (string, object)[0])
+            {
+                switch (parameter.name)
+                {
+                    case "Index" when parameter.value is int index:
+                        // tags are numbered from 1 on screen
+                        values.Add((index + 1).ToString());
+                        break;
+                    case "Next" when parameter.value is bool next:
+                        if (!next) values.Add("previous");
+                        break;
+                    default:
+                        if (parameter.value != null) values.Add(parameter.value.ToString());
+                        break;
+                }
+            }
+
+            return values.Count > 0 ? $"{label} ({string.Join(", ", values)})" : label;
+        }
+
+        private void loadShortcutRows()
+        {
+            foreach (ShortcutRow row in shortcutRows)
+            {
+                row.Changed -= ShortcutRow_Changed;
+            }
+
+            shortcutRows.Clear();
+            foreach (SuperKeyShortcut shortcut in _settings.SuperKeyShortcuts)
+            {
+                addShortcutRow(shortcut);
+            }
+        }
+
+        private void addShortcutRow(SuperKeyShortcut shortcut)
+        {
+            ShortcutRow row = new ShortcutRow(shortcut, id => ShortcutActions.FirstOrDefault(action => action.Id == id));
+            row.Changed += ShortcutRow_Changed;
+            shortcutRows.Add(row);
+        }
+
+        private void ShortcutRow_Changed(object sender, EventArgs e)
+        {
+            saveShortcuts();
+        }
+
+        private void saveShortcuts()
+        {
+            _settings.SuperKeyShortcuts = shortcutRows.Select(row => row.ToShortcut()).ToArray();
+        }
+
+        private void btnAddShortcut_OnClick(object sender, RoutedEventArgs e)
+        {
+            // incomplete until a key and action are chosen; incomplete shortcuts are skipped when registering
+            addShortcutRow(new SuperKeyShortcut());
+            saveShortcuts();
+        }
+
+        private void btnRemoveShortcut_OnClick(object sender, RoutedEventArgs e)
+        {
+            if ((sender as FrameworkElement)?.DataContext is ShortcutRow row)
+            {
+                row.Changed -= ShortcutRow_Changed;
+                shortcutRows.Remove(row);
+                saveShortcuts();
+            }
+        }
+
+        private void btnResetShortcuts_OnClick(object sender, RoutedEventArgs e)
+        {
+            _settings.SuperKeyShortcuts = SuperKeyShortcut.Defaults;
+            loadShortcutRows();
+            // the status update from the settings change ran against the old rows
+            updateShortcutStatus();
+        }
+
+        #endregion
 
         private void loadLoggingLevels()
         {
@@ -461,6 +726,8 @@ namespace CairoDesktop
         private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
         {
             saveChanges();
+            _lockManager.StateChanged -= LockManager_StateChanged;
+            _hotKeyService.EntriesChanged -= HotKeyService_EntriesChanged;
             _uiService.SettingsUi = null;
         }
 

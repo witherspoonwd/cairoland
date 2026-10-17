@@ -1,8 +1,13 @@
 using CairoDesktop.Application.Interfaces;
+using CairoDesktop.Application.Structs;
 using CairoDesktop.Common;
 using CairoDesktop.Common.Localization;
+using CairoDesktop.Interop;
+using ManagedShell.AppBar;
 using ManagedShell.Common.Helpers;
 using System;
+using System.Text;
+using System.Windows.Interop;
 
 namespace CairoDesktop.Tiling.Commands
 {
@@ -210,6 +215,79 @@ namespace CairoDesktop.Tiling.Commands
         }
     }
 
+    /// <summary>
+    /// Closes the foreground window the way its title bar X button does (WM_SYSCOMMAND SC_CLOSE), whether or not
+    /// tiling manages it.
+    /// </summary>
+    public class CloseActiveWindowCommand : TilingCommand
+    {
+        private static readonly string[] ShellClasses = { "Progman", "WorkerW", "Shell_TrayWnd", "Shell_SecondaryTrayWnd" };
+
+        public CloseActiveWindowCommand(ITilingManager manager)
+            : base(manager, "CloseActiveWindow", "Closes the active window.", () => DisplayString.sCommand_CloseActiveWindow) { }
+
+        protected override bool RequiresTiling => false;
+
+        protected override bool Run((string name, object value)[] parameters)
+        {
+            IntPtr hwnd = User32.GetForegroundWindow();
+            if (hwnd == IntPtr.Zero || hwnd == User32.GetShellWindow())
+            {
+                return false;
+            }
+
+            StringBuilder className = new StringBuilder(256);
+            User32.GetClassName(hwnd, className, className.Capacity);
+            if (Array.IndexOf(ShellClasses, className.ToString()) >= 0)
+            {
+                return false;
+            }
+
+            // never close Cairo's own bars
+            if (HwndSource.FromHwnd(hwnd)?.RootVisual is AppBarWindow)
+            {
+                return false;
+            }
+
+            return User32.PostMessage(hwnd, User32.WM_SYSCOMMAND, new IntPtr(User32.SC_CLOSE), IntPtr.Zero);
+        }
+    }
+
+    public class RunCommandCommand : TilingCommand
+    {
+        public RunCommandCommand(ITilingManager manager)
+            : base(manager, "RunCommand", "Runs a command line.", () => DisplayString.sCommand_RunCommand, CommandParameter) { }
+
+        protected override bool RequiresTiling => false;
+
+        private static readonly CairoCommandParameter CommandParameter = new CairoCommandParameter
+        {
+            Name = "Command",
+            Description = "The command line to run, e.g. notepad.exe or \"C:\\Program Files\\App\\app.exe\" --flag",
+            IsRequired = true
+        };
+
+        protected override bool Run((string name, object value)[] parameters)
+        {
+            string command = null;
+            foreach (var parameter in parameters)
+            {
+                if (parameter.name == "Command")
+                {
+                    command = parameter.value?.ToString();
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(command))
+            {
+                return false;
+            }
+
+            TilingLaunchTerminalCommand.SplitCommand(Environment.ExpandEnvironmentVariables(command.Trim()), out string fileName, out string arguments);
+            return ShellHelper.StartProcess(fileName, arguments);
+        }
+    }
+
     public class TilingLaunchTerminalCommand : TilingCommand
     {
         private readonly Settings _settings;
@@ -235,7 +313,7 @@ namespace CairoDesktop.Tiling.Commands
             return ShellHelper.StartProcess("cmd.exe");
         }
 
-        private static void SplitCommand(string command, out string fileName, out string arguments)
+        internal static void SplitCommand(string command, out string fileName, out string arguments)
         {
             if (command.StartsWith("\""))
             {

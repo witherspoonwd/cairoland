@@ -160,6 +160,8 @@ namespace CairoDesktop.Tiling
             Expect(_expectedHide, hwnd);
             _journal.AddHidden(hwnd);
             ShellLogger.Debug($"WindowArranger: Hiding 0x{hwnd.ToInt64():X}");
+            // tag switches should be instant; WindowAnimations covers windows DWM won't let us change
+            Dwmapi.DisableTransitions(hwnd);
             User32.ShowWindow(hwnd, User32.SW_HIDE);
         }
 
@@ -167,6 +169,7 @@ namespace CairoDesktop.Tiling
         {
             Expect(_expectedShow, hwnd);
             ShellLogger.Debug($"WindowArranger: Showing 0x{hwnd.ToInt64():X}");
+            Dwmapi.DisableTransitions(hwnd);
             User32.ShowWindow(hwnd, User32.SW_SHOWNA);
             _journal.RemoveHidden(hwnd);
         }

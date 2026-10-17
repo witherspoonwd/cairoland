@@ -366,10 +366,6 @@
                               Name="chkEnableMenuBarShadow">
                         <Label Content="{Binding Path=(l10n:DisplayString.sSettings_MenuBar_EnableMenuBarShadow)}" />
                     </CheckBox>
-                    <CheckBox IsChecked="{Binding Path=EnableMenuBarMultiMon, UpdateSourceTrigger=PropertyChanged}"
-                              Name="chkEnableMenuBarMultiMon">
-                        <Label Content="{Binding Path=(l10n:DisplayString.sSettings_MenuBar_EnableMenuBarMultiMon)}" />
-                    </CheckBox>
                     <StackPanel Orientation="Horizontal"
                                 Style="{StaticResource RadioGroup}">
                         <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_MenuBar_MenuBarEdge)}"
@@ -509,6 +505,7 @@
                                HorizontalAlignment="Left"
                                Foreground="#88ffffff"
                                TextWrapping="Wrap"
+                               Name="txtElevatedHelp"
                                Text="{Binding Path=(l10n:DisplayString.sSettings_Tiling_ElevatedHelp)}" />
 
                     <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_Tiling_Focus)}"
@@ -567,18 +564,170 @@
                               Name="chkRemapWinL">
                         <Label Content="{Binding Path=(l10n:DisplayString.sSettings_Tiling_RemapWinL)}" />
                     </CheckBox>
-                    <TextBlock Name="txtRemapWinLUnavailable"
-                               Width="400"
-                               HorizontalAlignment="Left"
-                               Foreground="#FFFFB060"
-                               TextWrapping="Wrap"
-                               Visibility="Collapsed"
-                               Text="{Binding Path=(l10n:DisplayString.sSettings_Tiling_RemapWinLUnavailable)}" />
+                    <StackPanel Orientation="Horizontal"
+                                Name="pnlRemapWinLUnavailable"
+                                Visibility="Collapsed">
+                        <TextBlock Width="400"
+                                   HorizontalAlignment="Left"
+                                   Foreground="#FFFFB060"
+                                   TextWrapping="Wrap"
+                                   Text="{Binding Path=(l10n:DisplayString.sSettings_Tiling_RemapWinLUnavailable)}" />
+                        <Button Height="24"
+                                Padding="10,0"
+                                Margin="5,0,0,0"
+                                VerticalAlignment="Center"
+                                Name="btnRemapWinLFix"
+                                Click="btnRemapWinLFix_OnClick"
+                                Content="{Binding Path=(l10n:DisplayString.sSettings_Tiling_RemapWinLFix)}" />
+                    </StackPanel>
                     <TextBlock Width="400"
                                HorizontalAlignment="Left"
                                Foreground="#88ffffff"
                                TextWrapping="Wrap"
                                Text="{Binding Path=(l10n:DisplayString.sSettings_Tiling_ExplorerHotkeysHelp)}" />
+                </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="{Binding Path=(l10n:DisplayString.sSettings_Shortcuts)}"
+                     Name="TabShortcuts">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              MaxHeight="520">
+                <StackPanel Orientation="Vertical">
+                    <TextBlock Width="640"
+                               HorizontalAlignment="Left"
+                               Foreground="#88ffffff"
+                               TextWrapping="Wrap"
+                               Text="{Binding Path=(l10n:DisplayString.sSettings_Shortcuts_Help)}" />
+
+                    <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_Shortcuts_Yours)}"
+                               Style="{StaticResource SettingGroupHeader}" />
+                    <ItemsControl Name="lstShortcuts"
+                                  Focusable="False">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Vertical"
+                                            Margin="0,0,0,6">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding ModifierPrefix}"
+                                                   FontWeight="Bold"
+                                                   MinWidth="0" />
+                                        <CheckBox IsChecked="{Binding Ctrl, UpdateSourceTrigger=PropertyChanged}">
+                                            <Label Content="Ctrl" />
+                                        </CheckBox>
+                                        <CheckBox IsChecked="{Binding Alt, UpdateSourceTrigger=PropertyChanged}">
+                                            <Label Content="Alt" />
+                                        </CheckBox>
+                                        <CheckBox IsChecked="{Binding Shift, UpdateSourceTrigger=PropertyChanged}">
+                                            <Label Content="Shift" />
+                                        </CheckBox>
+                                        <ComboBox Width="90"
+                                                  Margin="5,0"
+                                                  IsEditable="False"
+                                                  ToolTip="{Binding Path=(l10n:DisplayString.sSettings_Shortcuts_Key)}"
+                                                  ItemsSource="{Binding ShortcutKeys, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                  SelectedItem="{Binding Key, UpdateSourceTrigger=PropertyChanged}" />
+                                        <ComboBox Width="200"
+                                                  Margin="5,0"
+                                                  IsEditable="False"
+                                                  ToolTip="{Binding Path=(l10n:DisplayString.sSettings_Shortcuts_Action)}"
+                                                  ItemsSource="{Binding ShortcutActions, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                  DisplayMemberPath="Label"
+                                                  SelectedValuePath="Id"
+                                                  SelectedValue="{Binding Command, UpdateSourceTrigger=PropertyChanged}" />
+                                        <TextBox Width="200"
+                                                 Margin="5,0"
+                                                 VerticalAlignment="Center"
+                                                 IsEnabled="{Binding NeedsValue}"
+                                                 ToolTip="{Binding ValueHint}"
+                                                 Text="{Binding Value, UpdateSourceTrigger=PropertyChanged, Delay=500}" />
+                                        <Button Height="24"
+                                                Padding="8,0"
+                                                Margin="5,0"
+                                                VerticalAlignment="Center"
+                                                Click="btnRemoveShortcut_OnClick"
+                                                Content="{Binding Path=(l10n:DisplayString.sSettings_Shortcuts_Remove)}" />
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding Status}"
+                                               Margin="10,0,5,0"
+                                               MaxWidth="760"
+                                               HorizontalAlignment="Left"
+                                               TextWrapping="Wrap">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock"
+                                                   BasedOn="{StaticResource {x:Type TextBlock}}">
+                                                <Setter Property="Foreground"
+                                                        Value="#88ffffff" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsLive}"
+                                                                 Value="False">
+                                                        <Setter Property="Foreground"
+                                                                Value="#FFFFB060" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <StackPanel Orientation="Horizontal"
+                                Margin="0,4,0,0">
+                        <Button Height="24"
+                                Padding="10,0"
+                                Margin="5,0,0,0"
+                                Name="btnAddShortcut"
+                                Click="btnAddShortcut_OnClick"
+                                Content="{Binding Path=(l10n:DisplayString.sSettings_Shortcuts_Add)}" />
+                        <Button Height="24"
+                                Padding="10,0"
+                                Margin="5,0,0,0"
+                                Name="btnResetShortcuts"
+                                Click="btnResetShortcuts_OnClick"
+                                Content="{Binding Path=(l10n:DisplayString.sSettings_Shortcuts_Reset)}" />
+                    </StackPanel>
+
+                    <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_Shortcuts_BuiltIn)}"
+                               Style="{StaticResource SettingGroupHeader}" />
+                    <ItemsControl Name="lstBuiltInKeys"
+                                  Focusable="False">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="140" />
+                                        <ColumnDefinition Width="300" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.Style>
+                                        <Style TargetType="Grid">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsLive}"
+                                                             Value="False">
+                                                    <Setter Property="Opacity"
+                                                            Value="0.45" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Grid.Style>
+                                    <TextBlock Grid.Column="0"
+                                               Margin="5,1"
+                                               FontWeight="Bold"
+                                               Text="{Binding Combo}" />
+                                    <TextBlock Grid.Column="1"
+                                               Margin="5,1"
+                                               TextTrimming="CharacterEllipsis"
+                                               Text="{Binding Action}" />
+                                    <TextBlock Grid.Column="2"
+                                               Margin="5,1"
+                                               Foreground="#88ffffff"
+                                               Text="{Binding Status}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
                 </StackPanel>
                 </ScrollViewer>
             </TabItem>

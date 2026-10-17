@@ -173,13 +173,6 @@ namespace CairoDesktop.Common
             set => Set(ref _enableMenuBarBlur, value);
         }
 
-        private bool _enableMenuBarMultiMon = true; // tags are per screen, so each screen needs its own bar
-        public bool EnableMenuBarMultiMon
-        {
-            get => _enableMenuBarMultiMon;
-            set => Set(ref _enableMenuBarMultiMon, value);
-        }
-
         private bool _showHibernate;
         public bool ShowHibernate
         {
@@ -351,6 +344,24 @@ namespace CairoDesktop.Common
         {
             get => _remapWinL;
             set => Set(ref _remapWinL, value);
+        }
+
+        /// <summary>
+        /// User-defined Super key shortcuts. They take priority over the built-in tiling keys.
+        /// </summary>
+        private SuperKeyShortcut[] _superKeyShortcuts = SuperKeyShortcut.Defaults;
+        public SuperKeyShortcut[] SuperKeyShortcuts
+        {
+            get => _superKeyShortcuts;
+            set => Set(ref _superKeyShortcuts, value ?? new SuperKeyShortcut[0]);
+        }
+
+        // missing from settings saved before it existed, so those count as 0 and get every newer default
+        private int _superKeyShortcutsVersion;
+        public int SuperKeyShortcutsVersion
+        {
+            get => _superKeyShortcutsVersion;
+            set => Set(ref _superKeyShortcutsVersion, value);
         }
         #endregion
 

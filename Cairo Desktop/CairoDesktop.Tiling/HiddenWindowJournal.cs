@@ -25,6 +25,11 @@ namespace CairoDesktop.Tiling
             public bool LockPolicyExisted { get; set; }
 
             public int LockPolicyValue { get; set; }
+
+            /// <summary>True when <see cref="MinAnimate"/> holds the original window animation setting.</summary>
+            public bool AnimationSaved { get; set; }
+
+            public int MinAnimate { get; set; }
         }
 
         private const int SaveDelayMs = 250;
@@ -109,8 +114,45 @@ namespace CairoDesktop.Tiling
             }
         }
 
+        public void SaveAnimation(int minAnimate)
+        {
+            lock (_lock)
+            {
+                _state.AnimationSaved = true;
+                _state.MinAnimate = minAnimate;
+                Save();
+            }
+        }
+
         /// <summary>
-        /// Shows every journaled window that still exists, restores the lock policy, and clears the journal.
+        /// Writes back the saved window animation setting, if any, and forgets it.
+        /// </summary>
+        public void RestoreAnimation()
+        {
+            lock (_lock)
+            {
+                if (!_state.AnimationSaved)
+                {
+                    return;
+                }
+
+                try
+                {
+                    WindowAnimations.Set(_state.MinAnimate);
+                }
+                catch (Exception ex)
+                {
+                    ShellLogger.Error($"HiddenWindowJournal: Unable to restore window animations: {ex.Message}");
+                }
+
+                _state.AnimationSaved = false;
+                Save();
+            }
+        }
+
+        /// <summary>
+        /// Shows every journaled window that still exists, restores the lock policy and window animations, and
+        /// clears the journal.
         /// </summary>
         public void RestoreAll()
         {
@@ -141,6 +183,8 @@ namespace CairoDesktop.Tiling
 
                     _state.LockPolicySaved = false;
                 }
+
+                RestoreAnimation();
 
                 Save();
             }

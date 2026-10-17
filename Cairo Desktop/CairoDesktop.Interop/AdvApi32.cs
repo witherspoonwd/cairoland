@@ -32,5 +32,20 @@ namespace CairoDesktop.Interop
 
         [DllImport(AdvApi32_DllName)]
         public static extern int RegNotifyChangeKeyValue(IntPtr hKey, bool watchSubtree, REG_NOTIFY_CHANGE notifyFilter, IntPtr hEvent, bool asynchronous);
+
+        public const uint TOKEN_QUERY = 0x0008;
+
+        public enum TOKEN_INFORMATION_CLASS
+        {
+            TokenUIAccess = 26
+        }
+
+        [DllImport(AdvApi32_DllName, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool OpenProcessToken(IntPtr processHandle, uint desiredAccess, out IntPtr tokenHandle);
+
+        [DllImport(AdvApi32_DllName, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool GetTokenInformation(IntPtr tokenHandle, TOKEN_INFORMATION_CLASS tokenInformationClass, out uint tokenInformation, uint tokenInformationLength, out uint returnLength);
     }
 }

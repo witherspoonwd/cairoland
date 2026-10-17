@@ -19,8 +19,8 @@ namespace CairoDesktop.MenuBar
         {
             if (DataContext is ScreenTagsViewModel model)
             {
-                // scrolling down moves to the next tag, as in awesome
-                model.CycleTagCommand.Execute(e.Delta < 0);
+                // scrolling up moves to the next tag
+                model.CycleTagCommand.Execute(e.Delta > 0);
                 e.Handled = true;
             }
         }
