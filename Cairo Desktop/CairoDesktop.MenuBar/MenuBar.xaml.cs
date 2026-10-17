@@ -26,28 +26,23 @@ namespace CairoDesktop.MenuBar
 {
     public partial class MenuBar : CairoAppBarWindow, IMenuBar
     {
-        internal readonly IAppGrabber _appGrabber;
         private readonly IApplicationUpdateService _applicationUpdateService;
         private readonly ISettingsUIService _settingsUiService;
         internal readonly ICommandService _commandService;
-        internal readonly IHost _host;
         private readonly Settings _settings;
         private readonly AppBarEventService _appBarEventService;
         private readonly Dictionary<INotifyPropertyChanged, PropertyChangedEventHandler> _commandPropertyChangedHandlers = new Dictionary<INotifyPropertyChanged, PropertyChangedEventHandler>();
         private readonly Dictionary<UserControlMenuBarExtension, UserControl> _loadedMenuExtras = new Dictionary<UserControlMenuBarExtension, UserControl>();
 
         private bool isCairoMenuInitialized;
-        private bool isPlacesMenuInitialized;
         private MenuBarShadow shadow;
 
-        public MenuBar(ICairoApplication cairoApplication, AppBarEventService appBarEventService, ShellManager shellManager, IWindowManager windowManager, IHost host, IAppGrabber appGrabber, IApplicationUpdateService applicationUpdateService, ISettingsUIService settingsUiService, ICommandService commandService, Settings settings, AppBarScreen screen, AppBarEdge edge, AppBarMode mode) : base(cairoApplication, shellManager, windowManager, screen, edge, mode, 23)
+        public MenuBar(ICairoApplication cairoApplication, AppBarEventService appBarEventService, ShellManager shellManager, IWindowManager windowManager, IApplicationUpdateService applicationUpdateService, ISettingsUIService settingsUiService, ICommandService commandService, Settings settings, AppBarScreen screen, AppBarEdge edge, AppBarMode mode) : base(cairoApplication, shellManager, windowManager, screen, edge, mode, 23)
         {
             _appBarEventService = appBarEventService;
-            _appGrabber = appGrabber;
             _applicationUpdateService = applicationUpdateService;
             _settingsUiService = settingsUiService;
             _commandService = commandService;
-            _host = host;
             _settings = settings;
 
             object menuBarWindowAllowsTransparencyResource = TryFindResource("MenuBarWindowAllowsTransparency");
@@ -59,26 +54,10 @@ namespace CairoDesktop.MenuBar
             AutoHideShowDelayMs = _settings.AutoHideShowDelayMs;
             RequiresScreenEdge = true;
 
-            setupChildren();
-
             _settings.PropertyChanged += Settings_PropertyChanged;
 
             // Set element that should be transformed for auto-hide
             AutoHideElement = MenuBarWindow;
-        }
-
-        private void setupChildren()
-        {
-            stacksContainer.MenuBar = this;
-            programsMenuControl.MenuBar = this;
-
-            setupPlacesMenu();
-            setupProgramsMenu();
-        }
-
-        private void setupPlacesMenu()
-        {
-            PlacesMenu.Visibility = _settings.EnablePlacesMenu ? Visibility.Visible : Visibility.Collapsed;
         }
 
         private void SetupMenuBarExtensions()
@@ -146,7 +125,6 @@ namespace CairoDesktop.MenuBar
                 "AboutCairo",
                 "CheckForUpdates",
                 "",
-                "OpenAppGrabber",
                 "OpenCairoSettings",
                 "OpenControlPanel",
                 "OpenWindowsSettings",
@@ -246,80 +224,6 @@ namespace CairoDesktop.MenuBar
             }
         }
 
-        private void PlacesMenu_Opened(object sender, RoutedEventArgs e)
-        {
-            if (isPlacesMenuInitialized)
-            {
-                return;
-            }
-
-            PlacesMenu.Items.Clear();
-
-            // TODO: Make configurable
-            var placesMenuItems = new string[]
-            {
-                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile, Environment.SpecialFolderOption.DoNotVerify),
-                Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments, Environment.SpecialFolderOption.DoNotVerify),
-                KnownFolders.GetPath(KnownFolder.Downloads),
-                Environment.GetFolderPath(Environment.SpecialFolder.MyMusic, Environment.SpecialFolderOption.DoNotVerify),
-                Environment.GetFolderPath(Environment.SpecialFolder.MyPictures, Environment.SpecialFolderOption.DoNotVerify),
-                Environment.GetFolderPath(Environment.SpecialFolder.MyVideos, Environment.SpecialFolderOption.DoNotVerify),
-                "",
-                ShellFolderPath.ComputerFolder.Value,
-                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles, Environment.SpecialFolderOption.DoNotVerify),
-                "",
-                ShellFolderPath.RecycleBinFolder.Value
-            };
-
-            var boldItems = new string[]
-            {
-                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile, Environment.SpecialFolderOption.DoNotVerify),
-                ShellFolderPath.ComputerFolder.Value
-            };
-
-            var openInWindowItems = new string[]
-            {
-                ShellFolderPath.RecycleBinFolder.Value
-            };
-
-            foreach (var path in placesMenuItems)
-            {
-                if (string.IsNullOrEmpty(path))
-                {
-                    PlacesMenu.Items.Add(new Separator());
-                    continue;
-                }
-
-                var folder = new ShellFolder(path, IntPtr.Zero, true, false);
-                if (!folder.Loaded)
-                {
-                    continue;
-                }
-
-                var menuItem = new MenuItem
-                {
-                    Header = folder.DisplayName.Replace("_", "__"),
-                    FontWeight = boldItems.Contains(path) ? FontWeights.Bold : FontWeights.Normal
-                };
-                menuItem.Click += (_sender, _e) => _commandService.InvokeCommand(!_settings.FoldersOpenDesktopOverlay || openInWindowItems.Contains(path) ? "OpenLocationInWindow" : "OpenLocation", ("Path", path));
-                PlacesMenu.Items.Add(menuItem);
-            }
-
-            // Add PlacesMenu MenuItems
-            if (_cairoApplication.Places.Count > 0)
-            {
-                PlacesMenu.Items.Add(new Separator());
-                foreach (var placesMenuItem in _cairoApplication.Places)
-                {
-                    var menuItem = new MenuItem { Header = placesMenuItem.Header };
-                    menuItem.Click += placesMenuItem.MenuItem_Click;
-                    PlacesMenu.Items.Add(menuItem);
-                }
-            }
-
-            isPlacesMenuInitialized = true;
-        }
-
         private void setupShadow()
         {
             if (_settings.EnableMenuBarShadow && shadow == null && AppBarMode != AppBarMode.AutoHide)
@@ -339,68 +243,6 @@ namespace CairoDesktop.MenuBar
 
             setupShadow();
         }
-
-        #region Programs menu
-        private void setupProgramsMenu()
-        {
-            ProgramsMenu.Visibility = _settings.EnableProgramsMenu ? Visibility.Visible : Visibility.Collapsed;
-        }
-
-        internal void OpenProgramsMenu()
-        {
-            if (ProgramsMenu.IsSubmenuOpen || !_settings.EnableProgramsMenu) { return; }
-
-            NativeMethods.SetForegroundWindow(Handle);
-            UnAutoHideBeforeAction(() => ProgramsMenu.IsSubmenuOpen = true);
-        }
-
-        internal void ToggleProgramsMenu()
-        {
-            if (!ProgramsMenu.IsSubmenuOpen)
-            {
-                OpenProgramsMenu();
-            }
-            else
-            {
-                ProgramsMenu.IsSubmenuOpen = false;
-            }
-        }
-
-        private void ProgramsMenu_SubmenuOpened(object sender, RoutedEventArgs e)
-        {
-            programsMenuControl.ResetSearch();
-            programsMenuControl.FocusSearchBox();
-        }
-
-        private void ProgramsMenu_DragOver(object sender, DragEventArgs e)
-        {
-            if (e.Data.GetDataPresent(DataFormats.FileDrop))
-            {
-                e.Effects = DragDropEffects.Link;
-            }
-            else if (!e.Data.GetDataPresent(typeof(ApplicationInfo)))
-            {
-                e.Effects = DragDropEffects.None;
-            }
-
-            e.Handled = true;
-        }
-
-        private void ProgramsMenu_Drop(object sender, DragEventArgs e)
-        {
-            string[] fileNames = e.Data.GetData(DataFormats.FileDrop) as string[];
-            if (fileNames != null)
-            {
-                _appGrabber.AddByPath(fileNames, AppCategoryType.Uncategorized);
-            }
-            else if (e.Data.GetDataPresent(typeof(ApplicationInfo)))
-            {
-                ApplicationInfo dropData = e.Data.GetData(typeof(ApplicationInfo)) as ApplicationInfo;
-
-                _appGrabber.AddByPath(dropData.Path, AppCategoryType.Uncategorized);
-            }
-        }
-        #endregion
 
         #region Events
 
@@ -483,16 +325,6 @@ namespace CairoDesktop.MenuBar
             }
         }
 
-        private void keyboardListener_OnKeyPressed(object sender, Common.KeyEventArgs e)
-        {
-            if (e.Key == Key.LWin || e.Key == Key.RWin)
-            {
-                ShellLogger.Debug(e.Key.ToString() + " Key Pressed");
-                ToggleProgramsMenu();
-                e.Handled = true;
-            }
-        }
-
         private void MenuBar_OnMouseEnter(object sender, MouseEventArgs e)
         {
             _appBarEventService.NotifyAppBarEvent(this, AppBarEventReason.MouseEnter);
@@ -551,12 +383,6 @@ namespace CairoDesktop.MenuBar
                     case nameof(_settings.EnableMenuExtraVolume):
                         StopMenuBarExtensions();
                         SetupMenuBarExtensions();
-                        break;
-                    case nameof(_settings.EnablePlacesMenu):
-                        setupPlacesMenu();
-                        break;
-                    case nameof(_settings.EnableProgramsMenu):
-                        setupProgramsMenu();
                         break;
                 }
             }

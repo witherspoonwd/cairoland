@@ -11,8 +11,6 @@ namespace CairoDesktop.Application.Interfaces
 
         List<IMenuBarExtension> MenuBarExtensions { get; }
 
-        List<IMenuItem> Places { get; }
-
         string AppVersion { get; }
         
         bool IsShuttingDown { get; }

@@ -1,28 +1,22 @@
-﻿using CairoDesktop.AppGrabber;
-using CairoDesktop.Application.Interfaces;
+﻿using CairoDesktop.Application.Interfaces;
 using CairoDesktop.Common;
 using CairoDesktop.Infrastructure.ObjectModel;
 using CairoDesktop.Infrastructure.Services;
 using ManagedShell.AppBar;
-using Microsoft.Extensions.Hosting;
 
 namespace CairoDesktop.MenuBar.Services
 {
     public class MenuBarWindowService : AppBarWindowService
     {
-        private readonly IAppGrabber _appGrabber;
         private readonly ISettingsUIService _settingsUiService;
         private readonly IApplicationUpdateService _updateService;
         private readonly ICommandService _commandService;
-        private readonly IHost _host;
 
-        public MenuBarWindowService(ICairoApplication cairoApplication, IHost host, AppBarEventService appBarEventService, ShellManagerService shellManagerService, IWindowManager windowManager, IAppGrabber appGrabber, IApplicationUpdateService updateService, ISettingsUIService settingsUiService, ICommandService commandService, Settings settings) : base(cairoApplication, appBarEventService, shellManagerService, windowManager, settings)
+        public MenuBarWindowService(ICairoApplication cairoApplication, AppBarEventService appBarEventService, ShellManagerService shellManagerService, IWindowManager windowManager, IApplicationUpdateService updateService, ISettingsUIService settingsUiService, ICommandService commandService, Settings settings) : base(cairoApplication, appBarEventService, shellManagerService, windowManager, settings)
         {
-            _appGrabber = appGrabber;
             _settingsUiService = settingsUiService;
             _updateService = updateService;
             _commandService = commandService;
-            _host = host;
 
             EnableMultiMon = _settings.EnableMenuBarMultiMon;
             EnableService = _settings.EnableMenuBar;
@@ -43,7 +37,7 @@ namespace CairoDesktop.MenuBar.Services
 
         protected override void OpenWindow(AppBarScreen screen)
         {
-            MenuBar newMenuBar = new MenuBar(_cairoApplication, _appBarEventService, _shellManager, _windowManager, _host, _appGrabber, _updateService, _settingsUiService, _commandService, _settings, screen, _settings.MenuBarEdge, _settings.EnableMenuBarAutoHide ? AppBarMode.AutoHide : AppBarMode.Normal);
+            MenuBar newMenuBar = new MenuBar(_cairoApplication, _appBarEventService, _shellManager, _windowManager, _updateService, _settingsUiService, _commandService, _settings, screen, _settings.MenuBarEdge, _settings.EnableMenuBarAutoHide ? AppBarMode.AutoHide : AppBarMode.Normal);
             Windows.Add(newMenuBar);
             newMenuBar.Show();
         }

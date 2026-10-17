@@ -244,7 +244,7 @@ namespace CairoDesktop.AppGrabber
         private ImageSource GetAssociatedIcon()
         {
             IconSize size = IconSize.Small;
-            if (Category != null && Category.Type == AppCategoryType.QuickLaunch && Settings.Instance.TaskbarIconSize != IconSize.Small)
+            if (Category != null && Category.Type == AppCategoryType.QuickLaunch)
                 size = IconSize.Large;
 
             return GetIconImageSource(size);

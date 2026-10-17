@@ -10,21 +10,10 @@ namespace CairoDesktop.Commands
     {
         public ICairoCommandInfo Info => _info;
 
-        private readonly ICommandService _commandService;
         private readonly OpenPersonalizeControlPanelCommandInfo _info = new OpenPersonalizeControlPanelCommandInfo();
-
-        public OpenPersonalizeControlPanelCommand(ICommandService commandService)
-        {
-            _commandService = commandService;
-        }
 
         public bool Execute(params (string name, object value)[] parameters)
         {
-            if (EnvironmentHelper.IsAppRunningAsShell)
-            {
-                return _commandService.InvokeCommand("OpenCairoSettings", ("TabIdentifier", "desktop"));
-            }
-
             return ShellHelper.StartProcess("Rundll32.exe", "shell32.dll,Control_RunDLL desk.cpl,,2");
         }
     }

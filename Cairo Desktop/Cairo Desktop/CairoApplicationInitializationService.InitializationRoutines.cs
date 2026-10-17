@@ -97,7 +97,7 @@ namespace CairoDesktop
                 service.Register();
             }
 
-            _host.Services.GetService<IDesktopManager>()?.Initialize();
+            _host.Services.GetService<Services.ShellWindowService>()?.Initialize();
             _host.Services.GetService<IWindowManager>()?.InitialSetup();
         }
     }

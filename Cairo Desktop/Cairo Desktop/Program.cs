@@ -14,10 +14,7 @@ using System;
 using System.IO;
 using CairoDesktop.Commands;
 using CairoDesktop.Infrastructure.ObjectModel;
-using CairoDesktop.DynamicDesktop.Commands;
-using CairoDesktop.DynamicDesktop.Services;
 using CairoDesktop.MenuBar.Services;
-using CairoDesktop.Taskbar.Services;
 using CairoDesktop.AppGrabber.Commands;
 using CairoDesktop.MenuBar.Commands;
 using CairoDesktop.MenuBarExtensions.Commands;
@@ -71,9 +68,8 @@ namespace CairoDesktop
 
                     services.AddSingleton<IThemeService, CairoApplicationThemeService>();
 
-                    services.AddSingleton<IDesktopManager, DesktopManager>();
+                    services.AddSingleton<ShellWindowService>();
                     services.AddSingleton<IWindowService, MenuBarWindowService>();
-                    services.AddSingleton<IWindowService, TaskbarWindowService>();
 
 #if ENABLEFIRSTRUN
                     services.AddHostedService<FirstRunService>();
@@ -109,11 +105,8 @@ namespace CairoDesktop
                     services.AddSingleton<ICairoCommand, ShutDownCommand>();
                     services.AddSingleton<ICairoCommand, SleepCommand>();
                     services.AddSingleton<ICairoCommand, StartTaskManagerCommand>();
-                    services.AddSingleton<ICairoCommand, ToggleDesktopOverlayCommand>();
                     services.AddSingleton<ICairoCommand, OpenLocationCommand>();
                     services.AddSingleton<ICairoCommand, OpenLocationInWindowCommand>();
-                    services.AddSingleton<ICairoCommand, AddStackCommand>();
-                    services.AddSingleton<ICairoCommand, RemoveStackCommand>();
                     services.AddSingleton<ICairoCommand, CopyFileCommand>();
                     services.AddSingleton<ICairoCommand, DeleteFileCommand>();
                     services.AddSingleton<ICairoCommand, OpenFileCommand>();
@@ -121,11 +114,9 @@ namespace CairoDesktop
                     services.AddSingleton<ICairoCommand, OpenDisplayControlPanelCommand>();
                     services.AddSingleton<ICairoCommand, OpenPersonalizeControlPanelCommand>();
                     services.AddSingleton<ICairoCommand, OpenProgramsControlPanelCommand>();
-                    services.AddSingleton<ICairoCommand, TaskViewCommand>();
                     services.AddSingleton<ICairoCommand, AddToProgramsCommand>();
                     services.AddSingleton<ICairoCommand, AddToQuickLaunchCommand>();
                     services.AddSingleton<ICairoCommand, ToggleCairoMenuCommand>();
-                    services.AddSingleton<ICairoCommand, ToggleProgramsMenuCommand>();
                     services.AddSingleton<ICairoCommand, ToggleCalendarCommand>();
                     services.AddSingleton<ICairoCommand, ToggleSearchCommand>();
                 })

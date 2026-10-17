@@ -1,6 +1,5 @@
 ﻿using CairoDesktop.Application.Interfaces;
 using CairoDesktop.Application.Structs;
-using CairoDesktop.Common;
 using CairoDesktop.Common.Localization;
 using CairoDesktop.Infrastructure.ObjectModel;
 using ManagedShell.ShellFolders;
@@ -13,22 +12,16 @@ namespace CairoDesktop.Commands
         public ICairoCommandInfo Info => _info;
 
         private readonly ICommandService _commandService;
-        private readonly IDesktopManager _desktopManager;
-        private readonly Settings _settings;
-        private readonly OpenLocationCommandInfo _info;
+        private readonly OpenLocationCommandInfo _info = new OpenLocationCommandInfo();
 
-        public OpenLocationCommand(ICommandService commandService, IDesktopManager desktopManager, Settings settings)
+        public OpenLocationCommand(ICommandService commandService)
         {
             _commandService = commandService;
-            _desktopManager = desktopManager;
-            _settings = settings;
-            _info = new OpenLocationCommandInfo(desktopManager, settings);
         }
 
         public bool Execute(params (string name, object value)[] parameters)
         {
             string path = null;
-            bool noOverlay = false;
 
             foreach (var parameter in parameters)
             {
@@ -40,36 +33,12 @@ namespace CairoDesktop.Commands
                             path = _path;
                         }
                         break;
-                    case "NoOverlay":
-                        if (parameter.value is bool _noOverlay)
-                        {
-                            noOverlay = _noOverlay;
-                        }
-                        break;
                 }
             }
 
             if (string.IsNullOrEmpty(path))
             {
                 return false;
-            }
-
-            if (_settings.EnableDynamicDesktop && _desktopManager.IsEnabled)
-            {
-                try
-                {
-                    _desktopManager.SetPath(path);
-                    if (!noOverlay)
-                    {
-                        _desktopManager.IsOverlayOpen = true;
-                    }
-
-                    return true;
-                }
-                catch
-                {
-                    return false;
-                }
             }
 
             return _commandService.InvokeCommand("OpenLocationInWindow", ("Path", path));
@@ -80,7 +49,7 @@ namespace CairoDesktop.Commands
     {
         public string Identifier => "OpenLocation";
 
-        public string Description => "Opens the specified location on the desktop if possible, otherwise in a new window.";
+        public string Description => "Opens the specified location in a new window.";
 
         public string Label => DisplayString.sCommand_OpenLocation;
 
@@ -92,34 +61,20 @@ namespace CairoDesktop.Commands
                 Name = "Path",
                 Description = "Path to open",
                 IsRequired = true
-            },
-            new CairoCommandParameter {
-                Name = "NoOverlay",
-                Description = "Boolean indicating whether the desktop overlay is suppressed.",
-                IsRequired = false
             }
         };
 
         public IReadOnlyCollection<CairoCommandParameter> Parameters => _parameters;
 
-        private readonly IDesktopManager _desktopManager;
-        private readonly Settings _settings;
-
-        public OpenLocationCommandInfo(IDesktopManager desktopManager, Settings settings)
-        {
-            _desktopManager = desktopManager;
-            _settings = settings;
-        }
-
         public string LabelForShellItem(ShellItem item)
         {
-            return _settings.EnableDynamicDesktop && _desktopManager.IsEnabled ?
-                DisplayString.sStacks_OpenOnDesktop : DisplayString.sStacks_OpenInNewWindow;
+            return DisplayString.sStacks_OpenInNewWindow;
         }
 
         public bool IsAvailableForShellItem(ShellItem item)
         {
-            return item.IsNavigableFolder && _settings.EnableDynamicDesktop && _desktopManager.IsEnabled;
+            // OpenLocationInWindow is offered in shell item context menus instead
+            return false;
         }
     }
 }

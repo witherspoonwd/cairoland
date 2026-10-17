@@ -27,8 +27,6 @@ namespace CairoDesktop.Services
                 _cairoApplication.Dispatch(() =>
                 {
                     new HotKey(Key.R, HotKeyModifier.Win | HotKeyModifier.NoRepeat, OnWinRCommand);
-                    new HotKey(Key.D, HotKeyModifier.Win | HotKeyModifier.NoRepeat, OnWinDCommand);
-                    new HotKey(Key.OemComma, HotKeyModifier.Win | HotKeyModifier.NoRepeat, OnWinDCommand);
                     new HotKey(Key.E, HotKeyModifier.Win | HotKeyModifier.NoRepeat, OnWinECommand);
                     new HotKey(Key.I, HotKeyModifier.Win | HotKeyModifier.NoRepeat, OnWinICommand);
                     new HotKey(Key.Pause, HotKeyModifier.Win | HotKeyModifier.NoRepeat, OnWinPauseCommand);
@@ -36,11 +34,6 @@ namespace CairoDesktop.Services
             }
         }
 
-        private void OnWinDCommand(HotKey obj)
-        {
-            _commandService.InvokeCommand("ToggleDesktopOverlay");
-        }
-        
         private void OnWinRCommand(HotKey cmd)
         {
             _commandService.InvokeCommand("ShowRunDialog");
@@ -48,7 +41,7 @@ namespace CairoDesktop.Services
 
         private void OnWinECommand(HotKey cmd)
         {
-            _commandService.InvokeCommand("OpenLocation", ("Path", "::{20D04FE0-3AEA-1069-A2D8-08002B30309D}"));
+            _commandService.InvokeCommand("OpenLocationInWindow", ("Path", "::{20D04FE0-3AEA-1069-A2D8-08002B30309D}"));
         }
 
         private void OnWinICommand(HotKey cmd)
@@ -60,11 +53,5 @@ namespace CairoDesktop.Services
         {
             ShellHelper.StartProcess("system.cpl");
         }
-
-        // TODO: Add window management related HotKeys
-        // Win + [up]
-        // Win + [down]
-        // Win + [left]
-        // Win + [right]
     }
 }

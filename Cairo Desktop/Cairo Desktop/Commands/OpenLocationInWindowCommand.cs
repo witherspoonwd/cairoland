@@ -14,13 +14,11 @@ namespace CairoDesktop.Commands
     {
         public ICairoCommandInfo Info => _info;
 
-        private readonly IDesktopManager _desktopManager;
         private readonly Settings _settings;
         private readonly OpenLocationInWindowCommandInfo _info = new OpenLocationInWindowCommandInfo();
 
-        public OpenLocationInWindowCommand(IDesktopManager desktopManager, Settings settings)
+        public OpenLocationInWindowCommand(Settings settings)
         {
-            _desktopManager = desktopManager;
             _settings = settings;
         }
 
@@ -45,8 +43,6 @@ namespace CairoDesktop.Commands
             {
                 return false;
             }
-
-            _desktopManager.IsOverlayOpen = false;
 
             var args = Environment.ExpandEnvironmentVariables(path);
             var filename = Environment.ExpandEnvironmentVariables(_settings.FileManager);

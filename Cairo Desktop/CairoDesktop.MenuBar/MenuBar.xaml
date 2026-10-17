@@ -38,27 +38,6 @@
                     </MenuItem.Header>
 					<MenuItem />
                 </MenuItem>
-                <MenuItem Header="{Binding Path=(l10n:DisplayString.sProgramsMenu)}"
-                          Name="ProgramsMenu"
-                          AllowDrop="True"
-                          Drop="ProgramsMenu_Drop"
-                          DragOver="ProgramsMenu_DragOver"
-                          ItemContainerStyle="{StaticResource CairoMenuItemContainerStyle}"
-                          TextBlock.FontWeight="SemiBold"
-                          StaysOpenOnClick="True"
-                          SubmenuOpened="ProgramsMenu_SubmenuOpened">
-                    <MenuItem StaysOpenOnClick="True">
-                        <MenuItem.Header>
-                            <control:ProgramsMenu x:Name="programsMenuControl" />
-                        </MenuItem.Header>
-                    </MenuItem>
-                </MenuItem>
-				<MenuItem Header="{Binding Path=(l10n:DisplayString.sPlacesMenu)}"
-						  Name="PlacesMenu"
-						  SubmenuOpened="PlacesMenu_Opened"
-                          TextBlock.FontWeight="SemiBold">
-					<MenuItem />
-				</MenuItem>
             </Menu>
         </StackPanel>
         <StackPanel Orientation="Horizontal"
@@ -70,6 +49,6 @@
                     Margin="0,0,0,0">
         </StackPanel>
         <!-- Last item added to DockPanel fills the remaining space! -->
-        <control:StacksContainer x:Name="stacksContainer" />
+        <Grid />
     </DockPanel>
 </objectModel:CairoAppBarWindow>

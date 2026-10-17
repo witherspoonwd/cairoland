@@ -48,9 +48,7 @@ namespace CairoDesktop.Services
             
             switch (tabIdentifier)
             {
-                case "desktop":
-                    SettingsUi.TabDesktop.IsSelected = true;
-                    break;
+                // tab identifiers are added here, e.g. "tiling"
             }
         }
     }

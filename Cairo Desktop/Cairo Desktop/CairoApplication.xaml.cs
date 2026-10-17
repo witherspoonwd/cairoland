@@ -49,7 +49,6 @@ namespace CairoDesktop
             Extensions = new List<IShellExtension>();
 
             CairoMenu = new List<IMenuItem>();
-            Places = new List<IMenuItem>();
             MenuBarExtensions = new List<IMenuBarExtension>();
 
             AppVersion = ProductVersion.ToString();
@@ -256,8 +255,6 @@ namespace CairoDesktop
         public List<IShellExtension> Extensions { get; }
 
         public List<IMenuItem> CairoMenu { get; }
-
-        public List<IMenuItem> Places { get; }
 
         public List<IMenuBarExtension> MenuBarExtensions { get; }
     }
