@@ -118,6 +118,12 @@
     <Resource Include="Resources\volumeMuteIconDefault.png" />
     <Resource Include="Resources\volumeOffIconBlack.png" />
     <Resource Include="Resources\volumeOffIconDefault.png" />
+    <Resource Include="Resources\Runch\runchos-fixed.png" />
+    <Resource Include="Resources\Runch\cpu.png" />
+    <Resource Include="Resources\Runch\temp.png" />
+    <Resource Include="Resources\Runch\ram.png" />
+    <Resource Include="Resources\Runch\speaker.png" />
+    <Resource Include="Resources\Runch\serious.png" />
   </ItemGroup>
 
 </Project>

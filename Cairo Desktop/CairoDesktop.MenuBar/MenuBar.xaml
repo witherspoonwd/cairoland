@@ -7,15 +7,17 @@
         xmlns:control="clr-namespace:CairoDesktop.MenuBar"
         x:Class="CairoDesktop.MenuBar.MenuBar"
         x:Name="MenuBarWindow"
-        Height="23"
+        Height="26"
         Top="0"
         Style="{StaticResource MenuBarWindowStyle}"
         Left="0"
         Focusable="False"
+        TextOptions.TextFormattingMode="Display"
+        UseLayoutRounding="True"
         LocationChanged="Window_LocationChanged"
         MouseEnter="MenuBar_OnMouseEnter"
         MouseLeave="MenuBar_OnMouseLeave"
-        MaxHeight="23">
+        MaxHeight="26">
     <Window.DataContext>
         <l10n:DisplayString />
     </Window.DataContext>
@@ -23,7 +25,7 @@
                x:Name="CairoMenuBarContainer">
         <StackPanel Orientation="Horizontal"
                     VerticalAlignment="Top"
-                    Height="24"
+                    Height="26"
                     Width="Auto"
                     x:Name="CairoMenuBar">
             <Menu Style="{StaticResource CairoMenuBarMainContainerStyle}">
@@ -33,8 +35,10 @@
                     <MenuItem.Header>
                         <Image Name="MenuIcon"
                                Source="{DynamicResource MenuIcon}"
-                               Width="38"
-                               Height="22" />
+                               Stretch="UniformToFill"
+                               RenderOptions.BitmapScalingMode="HighQuality"
+                               Width="26"
+                               Height="26" />
                     </MenuItem.Header>
 					<MenuItem />
                 </MenuItem>
@@ -44,7 +48,7 @@
         <StackPanel Orientation="Horizontal"
                     DockPanel.Dock="Right"
                     VerticalAlignment="Top"
-                    Height="24"
+                    Height="26"
                     HorizontalAlignment="Right"
                     x:Name="MenuExtrasHost"
                     Margin="0,0,0,0">

@@ -1,19 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Window x:Class="CairoDesktop.SettingsUI"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:Settings="clr-namespace:CairoDesktop.Common;assembly=CairoDesktop.Common"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:l10n="clr-namespace:CairoDesktop.Common.Localization;assembly=CairoDesktop.Common"
         xmlns:helpers="clr-namespace:ManagedShell.Common.Helpers;assembly=ManagedShell.Common"
         xmlns:supportingClasses="clr-namespace:CairoDesktop.SupportingClasses"
+        xmlns:tiling="clr-namespace:CairoDesktop.Tiling;assembly=CairoDesktop.Tiling"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         Title="{Binding Path=(l10n:DisplayString.sCairoMenu_CairoSettings)}"
-        SizeToContent="WidthAndHeight"
-        MaxHeight="600"
         WindowStartupLocation="CenterScreen"
         Closing="Window_Closing"
-        ResizeMode="NoResize"
+        ResizeMode="CanResize"
         WindowStyle="SingleBorderWindow"
-        SourceInitialized="Window_SourceInitialized">
+        SourceInitialized="Window_SourceInitialized"
+        tiling:TilingWindow.IsManaged="True"
+        mc:Ignorable="d"
+        d:DataContext="{d:DesignInstance Type=supportingClasses:SettingsPreviewData, IsDesignTimeCreatable=True}"
+        Width="960"
+        Height="700"
+        MinWidth="760"
+        MinHeight="480"
+        FontFamily="Segoe UI"
+        FontSize="12"
+        UseLayoutRounding="True"
+        d:Title="Cairo Settings">
     <Window.Resources>
         <supportingClasses:EnumStringConverter x:Key="enumStringConverter" />
         <supportingClasses:InvertBoolConverter x:Key="invertBoolConverter" />
@@ -87,8 +98,12 @@
                                     BorderThickness="0"
                                     Background="#ff191a1e">
                                 <ScrollViewer VerticalScrollBarVisibility="Auto"
-                                              Padding="16,8">
-                                    <ContentPresenter ContentSource="SelectedContent" />
+                                              Padding="16,8"
+                                              HorizontalScrollBarVisibility="Disabled"
+                                              HorizontalContentAlignment="Stretch">
+                                    <ContentPresenter ContentSource="SelectedContent"
+                                                      HorizontalAlignment="Stretch"
+                                                      VerticalAlignment="Top" />
                                 </ScrollViewer>
                             </Border>
                         </Grid>
@@ -104,10 +119,20 @@
                     Value="Segoe UI" />
             <Setter Property="FontSize"
                     Value="12" />
-            <Setter Property="Height"
+            <Setter Property="MinHeight"
                     Value="40" />
             <Setter Property="Width"
                     Value="130" />
+            <Setter Property="HeaderTemplate">
+                <Setter.Value>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding}"
+                                   Margin="0"
+                                   TextWrapping="Wrap"
+                                   Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}" />
+                    </DataTemplate>
+                </Setter.Value>
+            </Setter>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="TabItem">
@@ -118,7 +143,7 @@
                                               VerticalAlignment="Center"
                                               HorizontalAlignment="Left"
                                               ContentSource="Header"
-                                              Margin="10,0" />
+                                              Margin="10,8" />
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger SourceName="Tab"
@@ -155,7 +180,7 @@
             </Setter>
         </Style>
         <Style x:Key="RadioGroup"
-               TargetType="{x:Type StackPanel}">
+               TargetType="{x:Type FrameworkElement}">
             <Setter Property="Margin"
                     Value="0,4" />
         </Style>
@@ -169,6 +194,8 @@
                     Value="5,16,0,4" />
             <Setter Property="VerticalAlignment"
                     Value="Center" />
+            <Setter Property="TextWrapping"
+                    Value="Wrap" />
         </Style>
         <Style TargetType="{x:Type CheckBox}">
             <Setter Property="Margin"
@@ -190,13 +217,25 @@
             <Setter Property="VerticalAlignment"
                     Value="Center" />
             <Setter Property="MinWidth"
-                    Value="100" />
+                    Value="0" />
+            <Setter Property="TextWrapping"
+                    Value="Wrap" />
         </Style>
         <Style TargetType="{x:Type Label}">
             <Setter Property="Foreground"
                     Value="#ffe9ecf4" />
             <Setter Property="Padding"
                     Value="0" />
+            <Setter Property="ContentTemplate">
+                <Setter.Value>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding}"
+                                   TextWrapping="Wrap"
+                                   Margin="0"
+                                   Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Label}}" />
+                    </DataTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
         <Style TargetType="{x:Type TextBox}">
             <Setter Property="Foreground"
@@ -207,8 +246,6 @@
                     Value="0,8" />
             <Setter Property="Padding"
                     Value="3" />
-            <Setter Property="Width"
-                    Value="200" />
             <Setter Property="Height"
                     Value="24" />
         </Style>
@@ -217,12 +254,11 @@
                     Value="0,8" />
             <Setter Property="Padding"
                     Value="3" />
-            <Setter Property="Width"
-                    Value="200" />
             <Setter Property="Height"
                     Value="23" />
         </Style>
-        <Style TargetType="ItemsControl">
+        <Style TargetType="ItemsControl"
+               x:Key="TrayIconItems">
             <Setter Property="Width"
                     Value="160" />
             <Setter Property="AllowDrop"
@@ -239,7 +275,7 @@
                                                    Stroke="#55ffffff"
                                                    StrokeThickness="1"
                                                    Width="{Binding RelativeSource={RelativeSource TemplatedParent}, Path=ActualWidth}"
-                                                   Height="{Binding RelativeSource={RelativeSource TemplatedParent}, Path=ActualHeight}"/>
+                                                   Height="{Binding RelativeSource={RelativeSource TemplatedParent}, Path=ActualHeight}" />
                                     </VisualBrush.Visual>
                                 </VisualBrush>
                             </Border.BorderBrush>
@@ -277,50 +313,84 @@
     </Window.Resources>
     <Grid Background="#ff2e3034">
         <TabControl TabStripPlacement="Left"
-                    Style="{StaticResource SettingsTabControl}">
+                    Style="{StaticResource SettingsTabControl}"
+                    HorizontalContentAlignment="Stretch"
+                    VerticalContentAlignment="Top"
+                    SelectedIndex="0">
             <TabControl.Resources>
                 <Style TargetType="TabItem"
-                       BasedOn="{StaticResource SettingsTabItem}">
-                </Style>
+                       BasedOn="{StaticResource SettingsTabItem}" />
             </TabControl.Resources>
-
-            <TabItem Header="{Binding Path=(l10n:DisplayString.sSettings_General)}">
+            <TabItem Header="{Binding Path=(l10n:DisplayString.sSettings_General)}"
+                     d:Header="General">
                 <StackPanel Orientation="Vertical">
                     <CheckBox Click="EnableAutoUpdates_Click"
-                              Name="chkEnableAutoUpdates">
-                        <Label Content="{Binding Path=(l10n:DisplayString.sSettings_General_UpdateCheck)}" />
+                              Name="chkEnableAutoUpdates"
+                              d:IsChecked="True">
+                        <Label Content="{Binding Path=(l10n:DisplayString.sSettings_General_UpdateCheck)}"
+                               d:Content="Automatically check for updates" />
                     </CheckBox>
                     <CheckBox Click="chkRunAtLogOn_Click"
-                              Name="chkRunAtLogOn">
-                        <Label Content="{Binding Path=(l10n:DisplayString.sSettings_General_RunAtLogOn)}" />
+                              Name="chkRunAtLogOn"
+                              d:IsChecked="True">
+                        <Label Content="{Binding Path=(l10n:DisplayString.sSettings_General_RunAtLogOn)}"
+                               d:Content="Start Cairo when logging in" />
                     </CheckBox>
                     <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_Appearance)}"
-                               Style="{StaticResource SettingGroupHeader}" />
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_General_Language)}" />
+                               Style="{StaticResource SettingGroupHeader}"
+                               d:Text="Appearance" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_General_Language)}"
+                                   Grid.Column="0"
+                                   MaxWidth="220"
+                                   Margin="5,4,16,4"
+                                   d:Text="Language:" />
                         <ComboBox Name="cboLangSelect"
                                   DropDownClosed="DropDown_Changed"
                                   IsDropDownOpen="False"
                                   IsEditable="False"
-                                  SelectedValue="{Binding Path=Language, UpdateSourceTrigger=PropertyChanged}" />
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal">
+                                  SelectedValue="{Binding Path=Language, UpdateSourceTrigger=PropertyChanged}"
+                                  Grid.Column="1"
+                                  d:ItemsSource="{Binding Languages}"
+                                  d:SelectedIndex="0"
+                                  d:DisplayMemberPath=""
+                                  d:SelectedValuePath="" />
+                    </Grid>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
                         <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_General_Theme)}"
-                                   ToolTip="{Binding Path=(l10n:DisplayString.sSettings_General_ThemeTooltip)}" />
+                                   ToolTip="{Binding Path=(l10n:DisplayString.sSettings_General_ThemeTooltip)}"
+                                   Grid.Column="0"
+                                   MaxWidth="220"
+                                   Margin="5,4,16,4"
+                                   d:Text="Theme:" />
                         <ComboBox Name="cboThemeSelect"
                                   IsDropDownOpen="False"
                                   IsEditable="False"
-                                  SelectedValue="{Binding Path=Theme, UpdateSourceTrigger=PropertyChanged}" />
-                    </StackPanel>
+                                  SelectedValue="{Binding Path=Theme, UpdateSourceTrigger=PropertyChanged}"
+                                  Grid.Column="1"
+                                  d:ItemsSource="{Binding Themes}"
+                                  d:SelectedIndex="0"
+                                  d:DisplayMemberPath=""
+                                  d:SelectedValuePath="" />
+                    </Grid>
                 </StackPanel>
             </TabItem>
-
-            <TabItem Header="{Binding Path=(l10n:DisplayString.sSettings_MenuBar)}">
+            <TabItem Header="{Binding Path=(l10n:DisplayString.sSettings_MenuBar)}"
+                     d:Header="Menu Bar">
                 <StackPanel Orientation="Vertical">
-                    <StackPanel Orientation="Horizontal">
+                    <WrapPanel>
                         <CheckBox IsChecked="{Binding Path=EnableCairoMenuHotKey, UpdateSourceTrigger=PropertyChanged}"
                                   Name="chkEnableCairoMenuHotKey">
-                            <Label Content="{Binding Path=(l10n:DisplayString.sSettings_MenuBar_EnableCairoMenuHotKey)}" />
+                            <Label Content="{Binding Path=(l10n:DisplayString.sSettings_MenuBar_EnableCairoMenuHotKey)}"
+                                   d:Content="Enable Cairo menu hotkey:" />
                         </CheckBox>
                         <ComboBox Name="cboCairoMenuHotKeyMod1"
                                   IsEnabled="{Binding IsChecked, ElementName=chkEnableCairoMenuHotKey}"
@@ -329,7 +399,11 @@
                                   Width="55"
                                   Margin="5,-1,0,0"
                                   SelectionChanged="cboCairoMenuHotKey_OnSelectionChanged"
-                                  SelectedValue="{Binding Mode=OneWay, Path=CairoMenuHotKey[0], UpdateSourceTrigger=PropertyChanged}" />
+                                  SelectedValue="{Binding Mode=OneWay, Path=CairoMenuHotKey[0], UpdateSourceTrigger=PropertyChanged}"
+                                  d:ItemsSource="{Binding Options}"
+                                  d:SelectedIndex="0"
+                                  d:DisplayMemberPath=""
+                                  d:SelectedValuePath="" />
                         <ComboBox Name="cboCairoMenuHotKeyMod2"
                                   IsEnabled="{Binding IsChecked, ElementName=chkEnableCairoMenuHotKey}"
                                   IsDropDownOpen="False"
@@ -337,7 +411,11 @@
                                   Width="55"
                                   Margin="5,-1,0,0"
                                   SelectionChanged="cboCairoMenuHotKey_OnSelectionChanged"
-                                  SelectedValue="{Binding Mode=OneWay, Path=CairoMenuHotKey[1], UpdateSourceTrigger=PropertyChanged}" />
+                                  SelectedValue="{Binding Mode=OneWay, Path=CairoMenuHotKey[1], UpdateSourceTrigger=PropertyChanged}"
+                                  d:ItemsSource="{Binding Options}"
+                                  d:SelectedIndex="0"
+                                  d:DisplayMemberPath=""
+                                  d:SelectedValuePath="" />
                         <ComboBox Name="cboCairoMenuHotKeyKey"
                                   IsEnabled="{Binding IsChecked, ElementName=chkEnableCairoMenuHotKey}"
                                   IsDropDownOpen="False"
@@ -345,185 +423,251 @@
                                   Width="40"
                                   Margin="5,-1,0,0"
                                   SelectionChanged="cboCairoMenuHotKey_OnSelectionChanged"
-                                  SelectedValue="{Binding Mode=OneWay, Path=CairoMenuHotKey[2], UpdateSourceTrigger=PropertyChanged}" />
-                    </StackPanel>
+                                  SelectedValue="{Binding Mode=OneWay, Path=CairoMenuHotKey[2], UpdateSourceTrigger=PropertyChanged}"
+                                  d:ItemsSource="{Binding Options}"
+                                  d:SelectedIndex="0"
+                                  d:DisplayMemberPath=""
+                                  d:SelectedValuePath="" />
+                    </WrapPanel>
                     <CheckBox IsChecked="{Binding Path=ShowHibernate, UpdateSourceTrigger=PropertyChanged}"
                               Name="chkShowHibernate">
-                        <Label Content="{Binding Path=(l10n:DisplayString.sSettings_MenuBar_ShowHibernate)}" />
+                        <Label Content="{Binding Path=(l10n:DisplayString.sSettings_MenuBar_ShowHibernate)}"
+                               d:Content="Show Hibernate option in the Cairo menu" />
                     </CheckBox>
                     <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_Appearance)}"
-                               Style="{StaticResource SettingGroupHeader}" />
+                               Style="{StaticResource SettingGroupHeader}"
+                               d:Text="Appearance" />
                     <CheckBox IsChecked="{Binding Path=EnableMenuBarAutoHide, UpdateSourceTrigger=PropertyChanged}"
                               Name="chkEnableMenuBarAutoHide">
-                        <Label Content="{Binding Path=(l10n:DisplayString.sSettings_MenuBar_EnableMenuBarAutoHide)}" />
+                        <Label Content="{Binding Path=(l10n:DisplayString.sSettings_MenuBar_EnableMenuBarAutoHide)}"
+                               d:Content="Automatically hide the menu bar" />
                     </CheckBox>
                     <CheckBox IsChecked="{Binding Path=EnableMenuBarBlur, UpdateSourceTrigger=PropertyChanged}"
                               Name="chkEnableMenuBarBlur">
-                        <Label Content="{Binding Path=(l10n:DisplayString.sSettings_MenuBar_EnableMenuBarBlur)}" />
+                        <Label Content="{Binding Path=(l10n:DisplayString.sSettings_MenuBar_EnableMenuBarBlur)}"
+                               d:Content="Blur behind the menu bar" />
                     </CheckBox>
                     <CheckBox IsChecked="{Binding Path=EnableMenuBarShadow, UpdateSourceTrigger=PropertyChanged}"
                               IsEnabled="{Binding IsChecked, ElementName=chkEnableMenuBarAutoHide, Converter={StaticResource invertBoolConverter}}"
                               Name="chkEnableMenuBarShadow">
-                        <Label Content="{Binding Path=(l10n:DisplayString.sSettings_MenuBar_EnableMenuBarShadow)}" />
+                        <Label Content="{Binding Path=(l10n:DisplayString.sSettings_MenuBar_EnableMenuBarShadow)}"
+                               d:Content="Enable menu bar shadow" />
                     </CheckBox>
-                    <StackPanel Orientation="Horizontal"
-                                Style="{StaticResource RadioGroup}">
+                    <Grid Style="{StaticResource RadioGroup}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
                         <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_MenuBar_MenuBarEdge)}"
-                                   MinWidth="165"
                                    VerticalAlignment="Top"
-                                   Margin="5,3,5,4" />
-                        <StackPanel Orientation="Vertical">
+                                   Margin="5,4,16,4"
+                                   Grid.Column="0"
+                                   MaxWidth="220"
+                                   d:Text="Menu bar position:" />
+                        <StackPanel Orientation="Vertical"
+                                    Grid.Column="1">
                             <RadioButton GroupName="rdoMenuBarEdge"
                                          Name="radMenuBarEdgeTop"
                                          Click="radMenuBarEdgeTop_Click">
-                                <Label Content="{Binding Path=(l10n:DisplayString.sSettings_PositionTop)}" />
+                                <Label Content="{Binding Path=(l10n:DisplayString.sSettings_PositionTop)}"
+                                       d:Content="Top" />
                             </RadioButton>
                             <RadioButton GroupName="rdoMenuBarEdge"
                                          Name="radMenuBarEdgeBottom"
                                          Click="radMenuBarEdgeBottom_Click">
-                                <Label Content="{Binding Path=(l10n:DisplayString.sSettings_PositionBottom)}" />
+                                <Label Content="{Binding Path=(l10n:DisplayString.sSettings_PositionBottom)}"
+                                       d:Content="Bottom" />
                             </RadioButton>
                         </StackPanel>
-                    </StackPanel>
+                    </Grid>
                     <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_MenuBar_MenuExtras)}"
-                               Style="{StaticResource SettingGroupHeader}" />
-                    <StackPanel Orientation="Horizontal">
+                               Style="{StaticResource SettingGroupHeader}"
+                               d:Text="Menu bar items" />
+                    <WrapPanel>
                         <StackPanel Orientation="Vertical">
                             <CheckBox IsChecked="{Binding Path=EnableMenuExtraClock, UpdateSourceTrigger=PropertyChanged}"
                                       Name="chkEnableMenuExtraClock">
-                                <Label Content="{Binding Path=(l10n:DisplayString.sSettings_MenuBar_EnableMenuExtraClock)}" />
+                                <Label Content="{Binding Path=(l10n:DisplayString.sSettings_MenuBar_EnableMenuExtraClock)}"
+                                       d:Content="Clock" />
                             </CheckBox>
                             <CheckBox IsChecked="{Binding Path=EnableMenuExtraSearch, UpdateSourceTrigger=PropertyChanged}"
                                       Name="chkEnableMenuExtraSearch">
-                                <Label Content="{Binding Path=(l10n:DisplayString.sSettings_MenuBar_EnableMenuExtraSearch)}" />
+                                <Label Content="{Binding Path=(l10n:DisplayString.sSettings_MenuBar_EnableMenuExtraSearch)}"
+                                       d:Content="Search" />
                             </CheckBox>
                         </StackPanel>
-                        <StackPanel Orientation="Vertical" Margin="10,0,0,0">
+                        <StackPanel Orientation="Vertical"
+                                    Margin="10,0,0,0">
                             <CheckBox IsChecked="{Binding Path=EnableMenuExtraVolume, UpdateSourceTrigger=PropertyChanged}"
                                       Name="chkEnableMenuExtraVolume">
-                                <Label Content="{Binding Path=(l10n:DisplayString.sSettings_MenuBar_EnableMenuExtraVolume)}" />
+                                <Label Content="{Binding Path=(l10n:DisplayString.sSettings_MenuBar_EnableMenuExtraVolume)}"
+                                       d:Content="Volume" />
                             </CheckBox>
                             <CheckBox IsChecked="{Binding Path=EnableMenuExtraActionCenter, UpdateSourceTrigger=PropertyChanged}"
                                       Name="chkEnableMenuExtraActionCenter">
-                                <Label Content="{Binding Path=(l10n:DisplayString.sSettings_MenuBar_EnableMenuExtraActionCenter)}" />
+                                <Label Content="{Binding Path=(l10n:DisplayString.sSettings_MenuBar_EnableMenuExtraActionCenter)}"
+                                       d:Content="Action Center" />
                             </CheckBox>
                         </StackPanel>
-                    </StackPanel>
+                    </WrapPanel>
                     <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_MenuBar_NotificationArea)}"
-                               Style="{StaticResource SettingGroupHeader}" />
+                               Style="{StaticResource SettingGroupHeader}"
+                               d:Text="Notification area" />
                     <CheckBox IsChecked="{Binding Path=EnableSysTray, UpdateSourceTrigger=PropertyChanged}"
                               Click="CheckBox_Click"
                               Name="chkEnableSysTray">
-                        <Label Content="{Binding Path=(l10n:DisplayString.sSettings_MenuBar_EnableNotificationArea)}" />
+                        <Label Content="{Binding Path=(l10n:DisplayString.sSettings_MenuBar_EnableNotificationArea)}"
+                               d:Content="Enable notification area" />
                     </CheckBox>
                     <StackPanel Orientation="Vertical"
                                 Name="pnlTraySettings">
-                        <StackPanel Orientation="Horizontal"
-                                    Style="{StaticResource RadioGroup}">
+                        <Grid Style="{StaticResource RadioGroup}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
                             <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_MenuBar_ShowNotifyIcons)}"
-                                       MinWidth="165"
                                        VerticalAlignment="Top"
-                                       Margin="5,3,5,4" />
-                            <StackPanel Orientation="Vertical">
+                                       Margin="5,4,16,4"
+                                       Grid.Column="0"
+                                       MaxWidth="220"
+                                       d:Text="Show notification area icons:" />
+                            <StackPanel Orientation="Vertical"
+                                        Grid.Column="1">
                                 <RadioButton GroupName="rdoTrayMode"
                                              Name="radTrayMode0"
                                              Click="radTrayMode0_Click">
-                                    <Label Content="{Binding Path=(l10n:DisplayString.sSettings_MenuBar_ShowNotifyIconsCollapsed)}" />
+                                    <Label Content="{Binding Path=(l10n:DisplayString.sSettings_MenuBar_ShowNotifyIconsCollapsed)}"
+                                           d:Content="Collapsed" />
                                 </RadioButton>
                                 <RadioButton GroupName="rdoTrayMode"
                                              Name="radTrayMode1"
                                              Click="radTrayMode1_Click">
-                                    <Label Content="{Binding Path=(l10n:DisplayString.sSettings_MenuBar_ShowNotifyIconsAlways)}" />
+                                    <Label Content="{Binding Path=(l10n:DisplayString.sSettings_MenuBar_ShowNotifyIconsAlways)}"
+                                           d:Content="Always" />
                                 </RadioButton>
                             </StackPanel>
-                        </StackPanel>
-                        <StackPanel Orientation="Horizontal">
+                        </Grid>
+                        <WrapPanel>
                             <StackPanel Orientation="Vertical">
-                                <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_MenuBar_CollapsibleIcons)}" />
-                                <ItemsControl x:Name="UnpinnedIcons" DragOver="UnpinnedIcons_DragOver" Drop="UnpinnedIcons_Drop" />
+                                <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_MenuBar_CollapsibleIcons)}"
+                                           d:Text="Collapsible icons:" />
+                                <ItemsControl x:Name="UnpinnedIcons"
+                                              DragOver="UnpinnedIcons_DragOver"
+                                              Drop="UnpinnedIcons_Drop"
+                                              Style="{StaticResource TrayIconItems}" />
                             </StackPanel>
-                            <StackPanel Orientation="Vertical" Margin="16,0,0,0">
-                                <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_MenuBar_PinnedIcons)}" />
-                                <ItemsControl x:Name="PinnedIcons" DragOver="PinnedIcons_DragOver" Drop="PinnedIcons_Drop" />
+                            <StackPanel Orientation="Vertical"
+                                        Margin="16,0,0,0">
+                                <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_MenuBar_PinnedIcons)}"
+                                           d:Text="Pinned icons:" />
+                                <ItemsControl x:Name="PinnedIcons"
+                                              DragOver="PinnedIcons_DragOver"
+                                              Drop="PinnedIcons_Drop"
+                                              Style="{StaticResource TrayIconItems}" />
                             </StackPanel>
-                        </StackPanel>
-                        <TextBlock Width="300"
-                                   Foreground="#55ffffff"
+                        </WrapPanel>
+                        <TextBlock Foreground="#55ffffff"
                                    TextWrapping="Wrap"
                                    TextAlignment="Center"
-                                   Text="{Binding Path=(l10n:DisplayString.sSettings_MenuBar_NotificationAreaPinHelp)}" />
+                                   Text="{Binding Path=(l10n:DisplayString.sSettings_MenuBar_NotificationAreaPinHelp)}"
+                                   HorizontalAlignment="Stretch"
+                                   d:Text="To pin a notification area icon, drag it to the pinned icons area. To unpin an icon, drag it to the collapsible icons area." />
                     </StackPanel>
                 </StackPanel>
             </TabItem>
-
             <TabItem Header="{Binding Path=(l10n:DisplayString.sSettings_Tiling)}"
-                     Name="TabTiling">
-                <ScrollViewer VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Disabled"
-                              MaxHeight="520">
+                     Name="TabTiling"
+                     d:Header="Window Manager">
                 <StackPanel Orientation="Vertical">
                     <CheckBox IsChecked="{Binding Path=EnableTiling, UpdateSourceTrigger=PropertyChanged}"
-                              Name="chkEnableTiling">
-                        <Label Content="{Binding Path=(l10n:DisplayString.sSettings_Tiling_EnableTiling)}" />
+                              Name="chkEnableTiling"
+                              d:IsChecked="True">
+                        <Label Content="{Binding Path=(l10n:DisplayString.sSettings_Tiling_EnableTiling)}"
+                               d:Content="Enable the tiling window manager" />
                     </CheckBox>
                     <CheckBox IsChecked="{Binding Path=EnableTilingOutsideShell, UpdateSourceTrigger=PropertyChanged}"
                               Name="chkEnableTilingOutsideShell">
-                        <Label Content="{Binding Path=(l10n:DisplayString.sSettings_Tiling_EnableTilingOutsideShell)}" />
+                        <Label Content="{Binding Path=(l10n:DisplayString.sSettings_Tiling_EnableTilingOutsideShell)}"
+                               d:Content="Also tile when Explorer is the shell (for development)" />
                     </CheckBox>
-
                     <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_Tiling_Behavior)}"
-                               Style="{StaticResource SettingGroupHeader}" />
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_Tiling_Gap)}" />
+                               Style="{StaticResource SettingGroupHeader}"
+                               d:Text="Behavior" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_Tiling_Gap)}"
+                                   Grid.Column="0"
+                                   MaxWidth="220"
+                                   Margin="5,4,16,4"
+                                   d:Text="Gap between windows" />
                         <Slider Name="sldTilingGap"
                                 Minimum="0"
                                 Maximum="32"
-                                Width="150"
                                 IsSnapToTickEnabled="True"
                                 TickFrequency="1"
                                 VerticalAlignment="Center"
-                                Value="{Binding Path=TilingGap, UpdateSourceTrigger=PropertyChanged}" />
+                                Value="{Binding Path=TilingGap, UpdateSourceTrigger=PropertyChanged}"
+                                Grid.Column="1" />
                         <TextBlock Text="{Binding Path=TilingGap}"
                                    MinWidth="24"
-                                   Margin="8,0,0,0" />
-                    </StackPanel>
+                                   Margin="8,0,0,0"
+                                   Grid.Column="2" />
+                    </Grid>
                     <CheckBox IsChecked="{Binding Path=TilingFollowActivation, UpdateSourceTrigger=PropertyChanged}"
                               Name="chkTilingFollowActivation">
-                        <Label Content="{Binding Path=(l10n:DisplayString.sSettings_Tiling_FollowActivation)}" />
+                        <Label Content="{Binding Path=(l10n:DisplayString.sSettings_Tiling_FollowActivation)}"
+                               d:Content="Switch to a window's tag when it activates itself" />
                     </CheckBox>
-                    <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_Tiling_FloatClasses)}" />
+                    <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_Tiling_FloatClasses)}"
+                               d:Text="Always float these window classes (comma-separated)" />
                     <TextBox Name="txtTilingFloatClasses"
-                             Width="400"
-                             HorizontalAlignment="Left"
-                             Text="{Binding Path=TilingFloatClasses, Converter={StaticResource stringArrayConverter}, UpdateSourceTrigger=LostFocus}" />
-                    <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_Tiling_FloatExes)}" />
+                             HorizontalAlignment="Stretch"
+                             Text="{Binding Path=TilingFloatClasses, Converter={StaticResource stringArrayConverter}, UpdateSourceTrigger=LostFocus}"
+                             d:Text="#32770" />
+                    <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_Tiling_FloatExes)}"
+                               d:Text="Always float these programs (comma-separated, e.g. calc.exe)" />
                     <TextBox Name="txtTilingFloatExes"
-                             Width="400"
-                             HorizontalAlignment="Left"
-                             Text="{Binding Path=TilingFloatExes, Converter={StaticResource stringArrayConverter}, UpdateSourceTrigger=LostFocus}" />
-                    <TextBlock Width="400"
-                               HorizontalAlignment="Left"
+                             HorizontalAlignment="Stretch"
+                             Text="{Binding Path=TilingFloatExes, Converter={StaticResource stringArrayConverter}, UpdateSourceTrigger=LostFocus}"
+                             d:Text="Taskmgr.exe" />
+                    <TextBlock HorizontalAlignment="Stretch"
                                Foreground="#88ffffff"
                                TextWrapping="Wrap"
                                Name="txtElevatedHelp"
-                               Text="{Binding Path=(l10n:DisplayString.sSettings_Tiling_ElevatedHelp)}" />
-
+                               Text="{Binding Path=(l10n:DisplayString.sSettings_Tiling_ElevatedHelp)}"
+                               d:Text="Windows running as administrator cannot be moved by Cairo, so they float automatically." />
                     <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_Tiling_Focus)}"
-                               Style="{StaticResource SettingGroupHeader}" />
+                               Style="{StaticResource SettingGroupHeader}"
+                               d:Text="Focus" />
                     <CheckBox IsChecked="{Binding Path=EnableFocusFollowsMouse, UpdateSourceTrigger=PropertyChanged}"
-                              Name="chkEnableFocusFollowsMouse">
-                        <Label Content="{Binding Path=(l10n:DisplayString.sSettings_Tiling_FocusFollowsMouse)}" />
+                              Name="chkEnableFocusFollowsMouse"
+                              d:IsChecked="True">
+                        <Label Content="{Binding Path=(l10n:DisplayString.sSettings_Tiling_FocusFollowsMouse)}"
+                               d:Content="Focus follows mouse" />
                     </CheckBox>
                     <CheckBox IsChecked="{Binding Path=FocusFollowsMouseRaise, UpdateSourceTrigger=PropertyChanged}"
                               IsEnabled="{Binding IsChecked, ElementName=chkEnableFocusFollowsMouse}"
                               Name="chkFocusFollowsMouseRaise">
-                        <Label Content="{Binding Path=(l10n:DisplayString.sSettings_Tiling_FocusFollowsMouseRaise)}" />
+                        <Label Content="{Binding Path=(l10n:DisplayString.sSettings_Tiling_FocusFollowsMouseRaise)}"
+                               d:Content="Raise windows when they gain focus" />
                     </CheckBox>
-                    <StackPanel Orientation="Horizontal"
-                                IsEnabled="{Binding IsChecked, ElementName=chkEnableFocusFollowsMouse}">
-                        <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_Tiling_FocusFollowsMouseDelay)}" />
+                    <Grid IsEnabled="{Binding IsChecked, ElementName=chkEnableFocusFollowsMouse}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_Tiling_FocusFollowsMouseDelay)}"
+                                   Grid.Column="0"
+                                   MaxWidth="220"
+                                   Margin="5,4,16,4"
+                                   d:Text="Focus delay (ms)" />
                         <TextBox Name="txtFocusFollowsMouseDelay"
-                                 Width="50">
+                                 Grid.Column="1">
                             <TextBox.Text>
                                 <Binding Path="FocusFollowsMouseDelayMs"
                                          UpdateSourceTrigger="PropertyChanged">
@@ -533,111 +677,161 @@
                                 </Binding>
                             </TextBox.Text>
                         </TextBox>
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal"
-                                IsEnabled="{Binding IsChecked, ElementName=chkEnableFocusFollowsMouse}">
-                        <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_Tiling_FocusFollowsMouseMode)}" />
+                    </Grid>
+                    <Grid IsEnabled="{Binding IsChecked, ElementName=chkEnableFocusFollowsMouse}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_Tiling_FocusFollowsMouseMode)}"
+                                   Grid.Column="0"
+                                   MaxWidth="220"
+                                   Margin="5,4,16,4"
+                                   d:Text="Focus tracking mode" />
                         <ComboBox Name="cboFocusFollowsMouseMode"
                                   IsDropDownOpen="False"
                                   IsEditable="False"
-                                  Width="100"
-                                  SelectedValue="{Binding Path=FocusFollowsMouseMode, UpdateSourceTrigger=PropertyChanged}" />
-                    </StackPanel>
-
+                                  SelectedValue="{Binding Path=FocusFollowsMouseMode, UpdateSourceTrigger=PropertyChanged}"
+                                  Grid.Column="1"
+                                  d:ItemsSource="{Binding Options}"
+                                  d:SelectedIndex="0"
+                                  d:DisplayMemberPath=""
+                                  d:SelectedValuePath="" />
+                    </Grid>
                     <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_Tiling_Keyboard)}"
-                               Style="{StaticResource SettingGroupHeader}" />
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_Tiling_Modifier)}" />
+                               Style="{StaticResource SettingGroupHeader}"
+                               d:Text="Keyboard" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_Tiling_Modifier)}"
+                                   Grid.Column="0"
+                                   MaxWidth="220"
+                                   Margin="5,4,16,4"
+                                   d:Text="Hotkey modifier" />
                         <ComboBox Name="cboTilingModifier"
                                   IsDropDownOpen="False"
                                   IsEditable="False"
-                                  Width="100"
-                                  SelectedValue="{Binding Path=TilingModifier, UpdateSourceTrigger=PropertyChanged}" />
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_Tiling_TerminalCommand)}" />
+                                  SelectedValue="{Binding Path=TilingModifier, UpdateSourceTrigger=PropertyChanged}"
+                                  Grid.Column="1"
+                                  d:ItemsSource="{Binding Options}"
+                                  d:SelectedIndex="0"
+                                  d:DisplayMemberPath=""
+                                  d:SelectedValuePath="" />
+                    </Grid>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_Tiling_TerminalCommand)}"
+                                   Grid.Column="0"
+                                   MaxWidth="220"
+                                   Margin="5,4,16,4"
+                                   d:Text="Terminal command" />
                         <TextBox Name="txtTerminalCommand"
-                                 Width="250"
-                                 Text="{Binding Path=TerminalCommand, UpdateSourceTrigger=LostFocus}" />
-                    </StackPanel>
+                                 Text="{Binding Path=TerminalCommand, UpdateSourceTrigger=LostFocus}"
+                                 Grid.Column="1"
+                                 HorizontalAlignment="Stretch"
+                                 d:Text="wt.exe" />
+                    </Grid>
                     <CheckBox IsChecked="{Binding Path=RemapWinL, UpdateSourceTrigger=PropertyChanged}"
                               Name="chkRemapWinL">
-                        <Label Content="{Binding Path=(l10n:DisplayString.sSettings_Tiling_RemapWinL)}" />
+                        <Label Content="{Binding Path=(l10n:DisplayString.sSettings_Tiling_RemapWinL)}"
+                               d:Content="Use Win+L for the window manager (lock with Win+P)" />
                     </CheckBox>
-                    <StackPanel Orientation="Horizontal"
-                                Name="pnlRemapWinLUnavailable"
-                                Visibility="Collapsed">
-                        <TextBlock Width="400"
-                                   HorizontalAlignment="Left"
+                    <WrapPanel Name="pnlRemapWinLUnavailable"
+                               Visibility="Collapsed">
+                        <TextBlock HorizontalAlignment="Stretch"
                                    Foreground="#FFFFB060"
                                    TextWrapping="Wrap"
-                                   Text="{Binding Path=(l10n:DisplayString.sSettings_Tiling_RemapWinLUnavailable)}" />
+                                   Text="{Binding Path=(l10n:DisplayString.sSettings_Tiling_RemapWinLUnavailable)}"
+                                   d:Text="Win+L could not be remapped on this computer because the lock policy is not writable. Win+L still locks; use Win+Right instead." />
                         <Button Height="24"
                                 Padding="10,0"
                                 Margin="5,0,0,0"
                                 VerticalAlignment="Center"
                                 Name="btnRemapWinLFix"
                                 Click="btnRemapWinLFix_OnClick"
-                                Content="{Binding Path=(l10n:DisplayString.sSettings_Tiling_RemapWinLFix)}" />
-                    </StackPanel>
-                    <TextBlock Width="400"
-                               HorizontalAlignment="Left"
+                                Content="{Binding Path=(l10n:DisplayString.sSettings_Tiling_RemapWinLFix)}"
+                                d:Content="Fix..." />
+                    </WrapPanel>
+                    <TextBlock HorizontalAlignment="Stretch"
                                Foreground="#88ffffff"
                                TextWrapping="Wrap"
-                               Text="{Binding Path=(l10n:DisplayString.sSettings_Tiling_ExplorerHotkeysHelp)}" />
+                               Text="{Binding Path=(l10n:DisplayString.sSettings_Tiling_ExplorerHotkeysHelp)}"
+                               d:Text="Cairo takes over Win shortcuts that Windows also uses (such as Win+P, Win+W or, with Explorer as the shell, Win+1-9) while it runs. Win+P's display switcher is also turned off in Explorer so it can lock; Display projection stays in the Window Manager menu." />
                 </StackPanel>
-                </ScrollViewer>
             </TabItem>
-
             <TabItem Header="{Binding Path=(l10n:DisplayString.sSettings_Shortcuts)}"
-                     Name="TabShortcuts">
-                <ScrollViewer VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Disabled"
-                              MaxHeight="520">
+                     Name="TabShortcuts"
+                     d:Header="Shortcuts">
                 <StackPanel Orientation="Vertical">
-                    <TextBlock Width="640"
-                               HorizontalAlignment="Left"
+                    <TextBlock HorizontalAlignment="Stretch"
                                Foreground="#88ffffff"
                                TextWrapping="Wrap"
-                               Text="{Binding Path=(l10n:DisplayString.sSettings_Shortcuts_Help)}" />
-
+                               Text="{Binding Path=(l10n:DisplayString.sSettings_Shortcuts_Help)}"
+                               d:Text="Each shortcut runs a Cairo command. Commands that need a value (such as Run command, or Open location in new window) take it from the box after the action. Your shortcuts replace built-in keys on the same combo, and Cairo takes over combos that Windows uses (such as Win+P or Win+W) while it runs." />
                     <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_Shortcuts_Yours)}"
-                               Style="{StaticResource SettingGroupHeader}" />
+                               Style="{StaticResource SettingGroupHeader}"
+                               d:Text="Your shortcuts" />
                     <ItemsControl Name="lstShortcuts"
-                                  Focusable="False">
+                                  Focusable="False"
+                                  d:ItemsSource="{Binding Shortcuts}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <StackPanel Orientation="Vertical"
-                                            Margin="0,0,0,6">
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="{Binding ModifierPrefix}"
-                                                   FontWeight="Bold"
-                                                   MinWidth="0" />
-                                        <CheckBox IsChecked="{Binding Ctrl, UpdateSourceTrigger=PropertyChanged}">
-                                            <Label Content="Ctrl" />
-                                        </CheckBox>
-                                        <CheckBox IsChecked="{Binding Alt, UpdateSourceTrigger=PropertyChanged}">
-                                            <Label Content="Alt" />
-                                        </CheckBox>
-                                        <CheckBox IsChecked="{Binding Shift, UpdateSourceTrigger=PropertyChanged}">
-                                            <Label Content="Shift" />
-                                        </CheckBox>
-                                        <ComboBox Width="90"
-                                                  Margin="5,0"
+                                <Grid Margin="5,8,5,12">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="90" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding ModifierPrefix}"
+                                                       FontWeight="Bold"
+                                                       MinWidth="0" />
+                                            <CheckBox IsChecked="{Binding Ctrl, UpdateSourceTrigger=PropertyChanged}">
+                                                <Label Content="Ctrl" />
+                                            </CheckBox>
+                                            <CheckBox IsChecked="{Binding Alt, UpdateSourceTrigger=PropertyChanged}">
+                                                <Label Content="Alt" />
+                                            </CheckBox>
+                                            <CheckBox IsChecked="{Binding Shift, UpdateSourceTrigger=PropertyChanged}">
+                                                <Label Content="Shift" />
+                                            </CheckBox>
+                                        </StackPanel>
+                                        <ComboBox Margin="5,0"
                                                   IsEditable="False"
                                                   ToolTip="{Binding Path=(l10n:DisplayString.sSettings_Shortcuts_Key)}"
                                                   ItemsSource="{Binding ShortcutKeys, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                  SelectedItem="{Binding Key, UpdateSourceTrigger=PropertyChanged}" />
-                                        <ComboBox Width="200"
-                                                  Margin="5,0"
+                                                  SelectedItem="{Binding Key, UpdateSourceTrigger=PropertyChanged}"
+                                                  Grid.Column="1"
+                                                  d:ItemsSource="{Binding Keys}" />
+                                        <ComboBox Margin="5,0"
                                                   IsEditable="False"
                                                   ToolTip="{Binding Path=(l10n:DisplayString.sSettings_Shortcuts_Action)}"
                                                   ItemsSource="{Binding ShortcutActions, RelativeSource={RelativeSource AncestorType=Window}}"
                                                   DisplayMemberPath="Label"
                                                   SelectedValuePath="Id"
-                                                  SelectedValue="{Binding Command, UpdateSourceTrigger=PropertyChanged}" />
-                                        <TextBox Width="200"
-                                                 Margin="5,0"
+                                                  SelectedValue="{Binding Command, UpdateSourceTrigger=PropertyChanged}"
+                                                  Grid.Column="2"
+                                                  d:ItemsSource="{Binding Actions}" />
+                                    </Grid>
+                                    <Grid Grid.Row="1"
+                                          Margin="0,6,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox Margin="5,0"
                                                  VerticalAlignment="Center"
                                                  IsEnabled="{Binding NeedsValue}"
                                                  ToolTip="{Binding ValueHint}"
@@ -647,13 +841,15 @@
                                                 Margin="5,0"
                                                 VerticalAlignment="Center"
                                                 Click="btnRemoveShortcut_OnClick"
-                                                Content="{Binding Path=(l10n:DisplayString.sSettings_Shortcuts_Remove)}" />
-                                    </StackPanel>
+                                                Content="{Binding Path=(l10n:DisplayString.sSettings_Shortcuts_Remove)}"
+                                                Grid.Column="1"
+                                                d:Content="Remove" />
+                                    </Grid>
                                     <TextBlock Text="{Binding Status}"
-                                               Margin="10,0,5,0"
-                                               MaxWidth="760"
-                                               HorizontalAlignment="Left"
-                                               TextWrapping="Wrap">
+                                               Margin="5,6,5,0"
+                                               HorizontalAlignment="Stretch"
+                                               TextWrapping="Wrap"
+                                               Grid.Row="2">
                                         <TextBlock.Style>
                                             <Style TargetType="TextBlock"
                                                    BasedOn="{StaticResource {x:Type TextBlock}}">
@@ -669,36 +865,38 @@
                                             </Style>
                                         </TextBlock.Style>
                                     </TextBlock>
-                                </StackPanel>
+                                </Grid>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
-                    <StackPanel Orientation="Horizontal"
-                                Margin="0,4,0,0">
+                    <WrapPanel Margin="0,4,0,0">
                         <Button Height="24"
                                 Padding="10,0"
                                 Margin="5,0,0,0"
                                 Name="btnAddShortcut"
                                 Click="btnAddShortcut_OnClick"
-                                Content="{Binding Path=(l10n:DisplayString.sSettings_Shortcuts_Add)}" />
+                                Content="{Binding Path=(l10n:DisplayString.sSettings_Shortcuts_Add)}"
+                                d:Content="Add shortcut" />
                         <Button Height="24"
                                 Padding="10,0"
                                 Margin="5,0,0,0"
                                 Name="btnResetShortcuts"
                                 Click="btnResetShortcuts_OnClick"
-                                Content="{Binding Path=(l10n:DisplayString.sSettings_Shortcuts_Reset)}" />
-                    </StackPanel>
-
+                                Content="{Binding Path=(l10n:DisplayString.sSettings_Shortcuts_Reset)}"
+                                d:Content="Restore defaults" />
+                    </WrapPanel>
                     <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_Shortcuts_BuiltIn)}"
-                               Style="{StaticResource SettingGroupHeader}" />
+                               Style="{StaticResource SettingGroupHeader}"
+                               d:Text="Built-in keys" />
                     <ItemsControl Name="lstBuiltInKeys"
-                                  Focusable="False">
+                                  Focusable="False"
+                                  d:ItemsSource="{Binding BuiltInKeys}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <Grid>
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="140" />
-                                        <ColumnDefinition Width="300" />
+                                        <ColumnDefinition Width="130" />
+                                        <ColumnDefinition Width="2*" />
                                         <ColumnDefinition Width="*" />
                                     </Grid.ColumnDefinitions>
                                     <Grid.Style>
@@ -715,47 +913,74 @@
                                     <TextBlock Grid.Column="0"
                                                Margin="5,1"
                                                FontWeight="Bold"
-                                               Text="{Binding Combo}" />
+                                               Text="{Binding Combo}"
+                                               TextWrapping="Wrap" />
                                     <TextBlock Grid.Column="1"
                                                Margin="5,1"
-                                               TextTrimming="CharacterEllipsis"
-                                               Text="{Binding Action}" />
+                                               Text="{Binding Action}"
+                                               TextWrapping="Wrap" />
                                     <TextBlock Grid.Column="2"
                                                Margin="5,1"
                                                Foreground="#88ffffff"
-                                               Text="{Binding Status}" />
+                                               Text="{Binding Status}"
+                                               TextWrapping="Wrap" />
                                 </Grid>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                 </StackPanel>
-                </ScrollViewer>
             </TabItem>
-
-            <TabItem Header="{Binding Path=(l10n:DisplayString.sSettings_Advanced)}">
+            <TabItem Header="{Binding Path=(l10n:DisplayString.sSettings_Advanced)}"
+                     d:Header="Advanced">
                 <StackPanel Orientation="Vertical">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_Advanced_LoggingLevel)}" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_Advanced_LoggingLevel)}"
+                                   Grid.Column="0"
+                                   MaxWidth="220"
+                                   Margin="5,4,16,4"
+                                   d:Text="Logging level:" />
                         <ComboBox Name="cboLogSeverity"
                                   DropDownClosed="DropDown_Changed"
                                   IsDropDownOpen="False"
                                   IsEditable="False"
-                                  Width="109"
-                                  SelectedValue="{Binding Path=LogSeverity, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource enumStringConverter}}" />
+                                  SelectedValue="{Binding Path=LogSeverity, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource enumStringConverter}}"
+                                  Grid.Column="1"
+                                  d:ItemsSource="{Binding Options}"
+                                  d:SelectedIndex="0"
+                                  d:DisplayMemberPath=""
+                                  d:SelectedValuePath="" />
                         <Button Height="24"
                                 Padding="10,0"
                                 Margin="5,0,0,0"
                                 HorizontalAlignment="Left"
                                 Name="btnOpenLogsFolder"
                                 Click="btnOpenLogsFolder_OnClick"
-                                Content="{Binding Path=(l10n:DisplayString.sSettings_Advanced_OpenLogsFolder)}" />
-                    </StackPanel>
+                                Content="{Binding Path=(l10n:DisplayString.sSettings_Advanced_OpenLogsFolder)}"
+                                Grid.Column="2"
+                                d:Content="Open folder" />
+                    </Grid>
                     <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_Appearance)}"
-                               Style="{StaticResource SettingGroupHeader}" />
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_General_TimeFormat)}" />
+                               Style="{StaticResource SettingGroupHeader}"
+                               d:Text="Appearance" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_General_TimeFormat)}"
+                                   Grid.Column="0"
+                                   MaxWidth="220"
+                                   Margin="5,4,16,4"
+                                   d:Text="Time format:" />
                         <TextBox Name="timeSetting"
-                                 ToolTip="{Binding Path=(l10n:DisplayString.sSettings_General_TimeFormatTooltip)}">
+                                 ToolTip="{Binding Path=(l10n:DisplayString.sSettings_General_TimeFormatTooltip)}"
+                                 Grid.Column="1"
+                                 d:Text="h:mm tt">
                             <TextBox.Text>
                                 <Binding Path="TimeFormat"
                                          UpdateSourceTrigger="PropertyChanged">
@@ -765,11 +990,21 @@
                                 </Binding>
                             </TextBox.Text>
                         </TextBox>
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_General_DateFormat)}" />
+                    </Grid>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_General_DateFormat)}"
+                                   Grid.Column="0"
+                                   MaxWidth="220"
+                                   Margin="5,4,16,4"
+                                   d:Text="Date format:" />
                         <TextBox Name="dateSetting"
-                                 ToolTip="{Binding Path=(l10n:DisplayString.sSettings_General_DateFormatTooltip)}">
+                                 ToolTip="{Binding Path=(l10n:DisplayString.sSettings_General_DateFormatTooltip)}"
+                                 Grid.Column="1"
+                                 d:Text="dddd, MMMM d">
                             <TextBox.Text>
                                 <Binding Path="DateFormat"
                                          UpdateSourceTrigger="PropertyChanged">
@@ -779,11 +1014,20 @@
                                 </Binding>
                             </TextBox.Text>
                         </TextBox>
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_Advanced_AutoHideShowDelayMs)}" />
+                    </Grid>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_Advanced_AutoHideShowDelayMs)}"
+                                   Grid.Column="0"
+                                   MaxWidth="220"
+                                   Margin="5,4,16,4"
+                                   d:Text="Auto-hide show delay (ms):" />
                         <TextBox Name="autoHideShowDelayMsSetting"
-                                 Width="50">
+                                 Grid.Column="1"
+                                 d:Text="200">
                             <TextBox.Text>
                                 <Binding Path="AutoHideShowDelayMs"
                                          UpdateSourceTrigger="PropertyChanged">
@@ -793,17 +1037,29 @@
                                 </Binding>
                             </TextBox.Text>
                         </TextBox>
-                    </StackPanel>
+                    </Grid>
                     <CheckBox IsChecked="{Binding Path=ForceSoftwareRendering, UpdateSourceTrigger=PropertyChanged}"
                               Click="CheckBox_Click"
                               Name="chkForceSoftwareRendering">
-                        <Label Content="{Binding Path=(l10n:DisplayString.sSettings_General_ForceSoftwareRendering)}" />
+                        <Label Content="{Binding Path=(l10n:DisplayString.sSettings_General_ForceSoftwareRendering)}"
+                               d:Content="Force software rendering" />
                     </CheckBox>
                     <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_General_FilesAndFolders)}"
-                               Style="{StaticResource SettingGroupHeader}" />
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_General_FileManager)}" />
-                        <TextBox Name="fileManager">
+                               Style="{StaticResource SettingGroupHeader}"
+                               d:Text="Files and folders" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_General_FileManager)}"
+                                   Grid.Column="0"
+                                   MaxWidth="220"
+                                   Margin="5,4,16,4"
+                                   d:Text="File manager:" />
+                        <TextBox Name="fileManager"
+                                 Grid.Column="1"
+                                 d:Text="explorer.exe">
                             <TextBox.Text>
                                 <Binding Path="FileManager"
                                          UpdateSourceTrigger="PropertyChanged">
@@ -813,11 +1069,12 @@
                                 </Binding>
                             </TextBox.Text>
                         </TextBox>
-                    </StackPanel>
+                    </Grid>
                     <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_Advanced_Shell)}"
-                               Style="{StaticResource SettingGroupHeader}" />
+                               Style="{StaticResource SettingGroupHeader}"
+                               d:Text="Shell" />
                     <StackPanel Orientation="Vertical">
-                        <TextBlock>
+                        <TextBlock d:Text="Windows Explorer is currently your shell.">
                             <TextBlock.Style>
                                 <Style TargetType="TextBlock">
                                     <Setter Property="Foreground"
@@ -843,7 +1100,8 @@
                                 Margin="5,4"
                                 HorizontalAlignment="Left"
                                 Name="btnChangeShell"
-                                Click="btnChangeShell_Click">
+                                Click="btnChangeShell_Click"
+                                d:Content="Set Cairo as shell">
                             <Button.Style>
                                 <Style TargetType="Button">
                                     <Setter Property="Content"
@@ -861,7 +1119,6 @@
                     </StackPanel>
                 </StackPanel>
             </TabItem>
-
             <TabItem Style="{StaticResource CairoSettingsBarRestartStyle}"
                      Name="btnRestart"
                      MouseLeftButtonUp="RestartCairo"
@@ -870,14 +1127,16 @@
                     <StackPanel>
                         <TextBlock TextAlignment="Center"
                                    TextWrapping="Wrap"
-                                   Text="{Binding Path=(l10n:DisplayString.sSettings_RestartCairo)}" />
+                                   Text="{Binding Path=(l10n:DisplayString.sSettings_RestartCairo)}"
+                                   d:Text="Restart Cairo to apply" />
                     </StackPanel>
                 </TabItem.Header>
                 <TextBlock Foreground="#55FFFFFF"
                            FontSize="14"
                            Text="{Binding Path=(l10n:DisplayString.sSettings_Restarting)}"
                            MinWidth="300"
-                           TextAlignment="Center" />
+                           TextAlignment="Center"
+                           d:Text="Restarting..." />
             </TabItem>
         </TabControl>
     </Grid>

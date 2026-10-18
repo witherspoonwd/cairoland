@@ -17,68 +17,57 @@
     <system:Boolean x:Key="EnableDarkMode">True</system:Boolean>
     <system:Boolean x:Key="EnableInvertSystemNotifyIcons">False</system:Boolean>
 
+    <!-- Runch palette, taken from the quickshell bar (Theme.qml) -->
+    <Color x:Key="RunchDarkColor">#FF1e2832</Color>
+    <Color x:Key="RunchBorderColor">#FFeaf5ff</Color>
+    <Color x:Key="RunchTopColor">#FF596988</Color>
+    <Color x:Key="RunchTopHoverColor">#FF374654</Color>
+    <Color x:Key="RunchTopSelectedColor">#FF617091</Color>
+    <SolidColorBrush Color="{StaticResource RunchDarkColor}" x:Key="RunchDark" />
+    <SolidColorBrush Color="{StaticResource RunchTopColor}" x:Key="RunchTop" />
+    <SolidColorBrush Color="{StaticResource RunchTopHoverColor}" x:Key="RunchTopHover" />
+    <SolidColorBrush Color="{StaticResource RunchTopSelectedColor}" x:Key="RunchTopSelected" />
+    <SolidColorBrush Color="#FFbebb8d" x:Key="RunchSystray" />
+    <SolidColorBrush Color="#FF354f71" x:Key="RunchClock" />
+    <SolidColorBrush Color="#FF678684" x:Key="RunchCpuMonitor" />
+    <SolidColorBrush Color="#FF736786" x:Key="RunchRamMonitor" />
+    <SolidColorBrush Color="#FF7196c2" x:Key="RunchWindowIndicator" />
+    <SolidColorBrush Color="#FF9ac0ef" x:Key="RunchWindowIndicatorSelected" />
+    <SolidColorBrush Color="#FFFFFFFF" x:Key="RunchForeground" />
+    <!-- Helvetica is rarely installed on Windows; Arial is its metric-compatible stand-in -->
+    <FontFamily x:Key="RunchFontFamily">Helvetica, Arial</FontFamily>
+    <system:Double x:Key="RunchFontSize">14</system:Double>
+    <system:Double x:Key="RunchBarHeight">26</system:Double>
+    <system:Double x:Key="RunchMenuItemHeight">28</system:Double>
+    <system:Double x:Key="RunchMenuWidth">220</system:Double>
+
     <!-- Menu resources -->
     <system:Boolean x:Key="MenuBarWindowAllowsTransparency">True</system:Boolean>
     <SolidColorBrush Color="#00FFFFFF" x:Key="MenuBarWindowStyleBackground" />
-    <SolidColorBrush Color="#CF1a1a1a" x:Key="MenuBarBackground" />
-    <LinearGradientBrush StartPoint="0,0"
-                         EndPoint="0,1"
-                         x:Key="MenuBackgroundGradient">
-        <GradientStop Color="#cF0f0f0f"
-                      Offset="0" />
-        <GradientStop Color="#bf1a1a1a"
-                      Offset="0.8" />
-        <GradientStop Color="#cF0f0f0f"
-                      Offset="1" />
-    </LinearGradientBrush>
-    <LinearGradientBrush StartPoint="0,0"
-                         EndPoint="0,1"
-                         x:Key="MenuItemHoverGradient">
-        <GradientStop Color="#DF338FFF"
-                      Offset="0.0" />
-        <GradientStop Color="#8F1A4DFF"
-                      Offset="1.0" />
-    </LinearGradientBrush>
-    <LinearGradientBrush StartPoint="0,0"
-                         EndPoint="0,1"
-                         x:Key="MenuHeaderPressedGradient">
-        <GradientStop Color="#8F1A4DB5"
-                      Offset="0.0" />
-        <GradientStop Color="#DF338FFF"
-                      Offset="1.0" />
-    </LinearGradientBrush>
+    <SolidColorBrush Color="{StaticResource RunchDarkColor}" x:Key="MenuBarBackground" />
+    <SolidColorBrush Color="{StaticResource RunchDarkColor}" x:Key="MenuBackgroundGradient" />
+    <SolidColorBrush Color="{StaticResource RunchTopHoverColor}" x:Key="MenuItemHoverGradient" />
+    <SolidColorBrush Color="{StaticResource RunchTopSelectedColor}" x:Key="MenuHeaderPressedGradient" />
     <SolidColorBrush Color="#FFFFFFFF"
                      x:Key="MenuHeaderForeground" />
     <SolidColorBrush Color="#FFFFFFFF"
                      x:Key="MenuItemForeground" />
-    <SolidColorBrush Color="#FF12367F"
+    <SolidColorBrush Color="Transparent"
                      x:Key="MenuTopBorderBrush" />
-    <SolidColorBrush Color="#AF5b5b5b"
+    <SolidColorBrush Color="Transparent"
                      x:Key="MenuBorderBrush" />
-    <SolidColorBrush Color="#40FFFFFF"
+    <SolidColorBrush Color="{StaticResource RunchTopHoverColor}"
                      x:Key="MenuSeparator" />
     <SolidColorBrush Color="#FFFFFFFF"
                      x:Key="SysTrayExpanderColor" />
-    <SolidColorBrush Color="#AF707070"
+    <SolidColorBrush Color="Transparent"
                      x:Key="MenuBarBorder" />
-    <RadialGradientBrush x:Key="MenuHeaderHoverBackground"
-                         Center="0.5,1"
-                         GradientOrigin="0.5,1">
-        <GradientStop Color="#33FFFFFF"
-                      Offset="0.0" />
-        <GradientStop Color="#00FFFFFF"
-                      Offset="1.0" />
-    </RadialGradientBrush>
+    <SolidColorBrush Color="{StaticResource RunchTopHoverColor}"
+                     x:Key="MenuHeaderHoverBackground" />
     <DropShadowEffect x:Key="MenuShadow"
                       Color="Black"
                       ShadowDepth="4"
                       Direction="270"
-                      Opacity="0.6"
-                      BlurRadius="10" />
-	<DropShadowEffect x:Key="MenuShadowBottom"
-                      Color="Black"
-                      ShadowDepth="4"
-                      Direction="90"
                       Opacity="0.6"
                       BlurRadius="10" />
     <DropShadowEffect Color="Black"
@@ -87,12 +76,11 @@
                       Direction="90"
                       Opacity="0.6"
                       BlurRadius="0" />
-    <Thickness x:Key="MenuBarBorderThickness" Bottom="1" />
+    <Thickness x:Key="MenuBarBorderThickness">0</Thickness>
 
-    <!-- Tiling: the tag bar and window list reuse the menu brushes above, so themes restyle them automatically -->
+    <!-- Tiling: the tag bar and window list use the Runch brushes above -->
     <SolidColorBrush Color="#D0D86B00"
                      x:Key="TilingTagUrgentBackground" />
-    <system:Double x:Key="TilingTagEmptyOpacity">0.5</system:Double>
     <SolidColorBrush Color="#FF9a9a9a"
                      x:Key="NoItemsForeground" />
     <RadialGradientBrush x:Key="NotifyBalloonBackground"
@@ -214,7 +202,7 @@
 
     <!-- Image resources -->
     <BitmapImage x:Key="MenuIcon"
-                 UriSource="..\Resources\cairoMenuDefault.png"></BitmapImage>
+                 UriSource="..\Resources\Runch\runchos-fixed.png"></BitmapImage>
     <BitmapImage x:Key="SearchIcon"
                  UriSource="..\Resources\searchDefault.png"></BitmapImage>
     <BitmapImage x:Key="ActionCenterIcon"
@@ -233,6 +221,16 @@
                  UriSource="..\Resources\nullIcon.png"></BitmapImage>
     <BitmapImage x:Key="DateTimeIcon"
                  UriSource="..\Resources\dateTimeIcon.png"></BitmapImage>
+    <BitmapImage x:Key="RunchCpuIcon"
+                 UriSource="..\Resources\Runch\cpu.png"></BitmapImage>
+    <BitmapImage x:Key="RunchTempIcon"
+                 UriSource="..\Resources\Runch\temp.png"></BitmapImage>
+    <BitmapImage x:Key="RunchRamIcon"
+                 UriSource="..\Resources\Runch\ram.png"></BitmapImage>
+    <BitmapImage x:Key="RunchSpeakerIcon"
+                 UriSource="..\Resources\Runch\speaker.png"></BitmapImage>
+    <BitmapImage x:Key="RunchWindowFallbackIcon"
+                 UriSource="..\Resources\Runch\serious.png"></BitmapImage>
 
     <Style TargetType="{x:Type Control}">
         <Setter Property="Template">
@@ -310,29 +308,15 @@
             </Setter.Value>
         </Setter>
     </Style>
+    <!-- Menus are flat runchDark panels with no border, corner radius or shadow, like the quickshell RunchMenu -->
     <Style x:Key="CairoMenuBorderStyle"
            TargetType="{x:Type Border}">
         <Setter Property="BorderBrush"
                 Value="{DynamicResource ResourceKey=MenuTopBorderBrush}" />
         <Setter Property="BorderThickness"
-                Value="0,1,0,0" />
+                Value="0" />
         <Setter Property="Margin"
-                Value="5,0,5,11" />
-        <Setter Property="Effect"
-                Value="{DynamicResource ResourceKey=MenuShadow}" />
-		<Style.Triggers>
-			<DataTrigger Binding="{Binding Path=AppBarEdge, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Window}}}"
-                         Value="Bottom">
-				<DataTrigger.Setters>
-					<Setter Property="BorderThickness"
-							Value="0,0,0,1" />
-					<Setter Property="Margin"
-							Value="5,11,5,0" />
-					<Setter Property="Effect"
-							Value="{DynamicResource ResourceKey=MenuShadowBottom}" />
-				</DataTrigger.Setters>
-			</DataTrigger>
-		</Style.Triggers>
+                Value="0" />
     </Style>
     <Style x:Key="CairoMenuInnerBorderStyle"
            TargetType="{x:Type Border}">
@@ -341,31 +325,20 @@
         <Setter Property="BorderBrush"
                 Value="{DynamicResource ResourceKey=MenuBorderBrush}" />
         <Setter Property="BorderThickness"
-                Value="1,0,1,1" />
+                Value="0" />
         <Setter Property="CornerRadius"
-                Value="0,0,5,5" />
+                Value="0" />
         <Setter Property="Padding"
-                Value="0,3,0,3" />
-		<Style.Triggers>
-			<DataTrigger Binding="{Binding Path=AppBarEdge, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Window}}}"
-                         Value="Bottom">
-				<DataTrigger.Setters>
-					<Setter Property="BorderThickness"
-							Value="1,1,1,0" />
-					<Setter Property="CornerRadius"
-							Value="5,5,0,0" />
-				</DataTrigger.Setters>
-			</DataTrigger>
-		</Style.Triggers>
+                Value="0" />
     </Style>
     <Style x:Key="{x:Type MenuItem}"
            TargetType="{x:Type MenuItem}">
         <Setter Property="Foreground"
                 Value="{DynamicResource ResourceKey=MenuItemForeground}" />
         <Setter Property="FontFamily"
-                Value="{DynamicResource ResourceKey=GlobalFontFamily}" />
+                Value="{DynamicResource ResourceKey=RunchFontFamily}" />
         <Setter Property="FontSize"
-                Value="{DynamicResource ResourceKey=MediumFontSize}" />
+                Value="{DynamicResource ResourceKey=RunchFontSize}" />
         <Setter Property="FontWeight"
                 Value="Normal" />
         <Setter Property="HorizontalContentAlignment"
@@ -381,7 +354,7 @@
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition x:Name="Col0"
-                                                  MinWidth="17"
+                                                  MinWidth="8"
                                                   Width="Auto"
                                                   SharedSizeGroup="MenuItemIconColumnGroup" />
                                 <ColumnDefinition Width="Auto"
@@ -400,7 +373,7 @@
                             <!-- Glyph is a checkmark if needed for a checkable menu -->
                             <Grid Grid.Column="0"
                                   Visibility="Hidden"
-                                  Margin="4,0,6,0"
+                                  Margin="8,0,6,0"
                                   x:Name="GlyphPanel"
                                   VerticalAlignment="Center">
                                 <Path x:Name="GlyphPanelpath"
@@ -413,6 +386,7 @@
                             <ContentPresenter Grid.Column="1"
                                               Margin="{TemplateBinding Padding}"
                                               x:Name="HeaderHost"
+                                              VerticalAlignment="Center"
                                               RecognizesAccessKey="True"
                                               ContentSource="Header" />
                             <!-- Content for the menu IGT -->
@@ -458,9 +432,7 @@
                         <Trigger Property="Role"
                                  Value="TopLevelHeader">
                             <Setter Property="Padding"
-                                    Value="13,1,13,0" />
-                            <Setter Property="Margin"
-                                    Value="0,-2,0,0" />
+                                    Value="5,0,5,0" />
                             <Setter Property="Placement"
                                     Value="Bottom"
                                     TargetName="SubMenuPopup" />
@@ -470,10 +442,6 @@
                             <Setter Property="Width"
                                     Value="Auto"
                                     TargetName="Col3" />
-                            <Setter Property="Height"
-                                    Value="22" />
-                            <Setter Property="FontSize"
-                                    Value="{DynamicResource ResourceKey=LargeFontSize}" />
                             <Setter Property="Visibility"
                                     Value="Collapsed"
                                     TargetName="Icon" />
@@ -486,8 +454,6 @@
                             <Setter Property="Visibility"
                                     Value="Collapsed"
                                     TargetName="ArrowPanel" />
-                            <Setter Property="Effect"
-                                    Value="{DynamicResource ResourceKey=MenuHeaderShadow}" />
                             <Setter Property="Foreground"
                                     Value="{DynamicResource ResourceKey=MenuHeaderForeground}" />
                         </Trigger>
@@ -532,18 +498,14 @@
                         <Trigger Property="Role"
                                  Value="TopLevelItem">
                             <Setter Property="Padding"
-                                    Value="0,3,0,0" />
+                                    Value="0" />
                             <Setter Property="Visibility"
                                     Value="Collapsed"
                                     TargetName="ArrowPanel" />
                             <Setter Property="MinHeight"
-                                    Value="24" />
+                                    Value="{DynamicResource ResourceKey=RunchMenuItemHeight}" />
                             <Setter Property="Foreground"
                                     Value="{DynamicResource ResourceKey=MenuItemForeground}" />
-                            <Setter Property="FontSize"
-                                    Value="{DynamicResource ResourceKey=MediumFontSize}" />
-                            <Setter Property="FontFamily"
-                                    Value="{DynamicResource ResourceKey=GlobalFontFamily}" />
                         </Trigger>
                         <MultiTrigger>
                             <MultiTrigger.Conditions>
@@ -562,27 +524,11 @@
                             <Setter Property="DockPanel.Dock"
                                     Value="Top" />
                             <Setter Property="Padding"
-                                    Value="0,3,0,0" />
+                                    Value="0" />
                             <Setter Property="MinHeight"
-                                    Value="24" />
+                                    Value="{DynamicResource ResourceKey=RunchMenuItemHeight}" />
                             <Setter Property="Foreground"
                                     Value="{DynamicResource ResourceKey=MenuItemForeground}" />
-                            <Setter Property="FontSize"
-                                    Value="{DynamicResource ResourceKey=MediumFontSize}" />
-                            <Setter Property="FontFamily"
-                                    Value="{DynamicResource ResourceKey=GlobalFontFamily}" />
-                            <Setter Property="BorderThickness"
-                                    TargetName="SubMenuBorderTop"
-                                    Value="0" />
-                            <Setter Property="BorderThickness"
-                                    TargetName="SubMenuBorder"
-                                    Value="1" />
-                            <Setter Property="CornerRadius"
-                                    TargetName="SubMenuBorder"
-                                    Value="5" />
-                            <Setter Property="VerticalOffset"
-                                    TargetName="SubMenuPopup"
-                                    Value="-4" />
                         </Trigger>
                         <MultiTrigger>
                             <MultiTrigger.Conditions>
@@ -601,18 +547,14 @@
                             <Setter Property="DockPanel.Dock"
                                     Value="Top" />
                             <Setter Property="Padding"
-                                    Value="0,3,0,0" />
+                                    Value="0" />
                             <Setter Property="Visibility"
                                     Value="Collapsed"
                                     TargetName="ArrowPanel" />
                             <Setter Property="MinHeight"
-                                    Value="24" />
+                                    Value="{DynamicResource ResourceKey=RunchMenuItemHeight}" />
                             <Setter Property="Foreground"
                                     Value="{DynamicResource ResourceKey=MenuItemForeground}" />
-                            <Setter Property="FontSize"
-                                    Value="{DynamicResource ResourceKey=MediumFontSize}" />
-                            <Setter Property="FontFamily"
-                                    Value="{DynamicResource ResourceKey=GlobalFontFamily}" />
                         </Trigger>
                         <!-- If no Icon is present the we collapse the Icon Content -->
                         <Trigger Property="Icon"
@@ -641,135 +583,75 @@
             </Setter.Value>
         </Setter>
     </Style>
+    <!-- The Cairo menu: the runch logo flush against the left edge, opening a 220px menu straight below it -->
     <Style x:Key="CairoMenuItemCairoMenuStyle"
            TargetType="{x:Type MenuItem}">
 		<Setter Property="Template">
 			<Setter.Value>
 				<ControlTemplate TargetType="{x:Type MenuItem}">
-					<Border x:Name="ContainerBorder"
+					<Border x:Name="Border"
                             Background="Transparent"
                             BorderBrush="Transparent"
-                            Padding="13,0,0,0">
-						<Border x:Name="Border">
-							<Grid>
-								<Grid.ColumnDefinitions>
-									<ColumnDefinition Width="Auto"
-                                                      SharedSizeGroup="MenuTextColumnGroup" />
-								</Grid.ColumnDefinitions>
-								<!-- Content for the menu text etc -->
-								<ContentPresenter Grid.Column="0"
-                                                  Margin="{TemplateBinding Padding}"
-                                                  x:Name="HeaderHost"
-                                                  RecognizesAccessKey="True"
-                                                  ContentSource="Header" />
-								<!-- The Popup is the body of the menu which expands down or across depending on the level of the item -->
-								<Popup IsOpen="{Binding Path=IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}}"
-                                       Placement="Right"
-                                       x:Name="SubMenuPopup"
-                                       Focusable="false"
-                                       PopupAnimation="Fade"
-                                       AllowsTransparency="True">
-									<Border x:Name="SubMenuBorderTop"
-											Style="{StaticResource ResourceKey=CairoMenuBorderStyle}"
-											Margin="11,0,5,11">
-										<Border x:Name="SubMenuBorder"
-												Style="{StaticResource ResourceKey=CairoMenuInnerBorderStyle}">
-											<Grid x:Name="SubMenu"
-												  Grid.IsSharedSizeScope="True">
-												<StackPanel IsItemsHost="True"
-															KeyboardNavigation.DirectionalNavigation="Cycle" />
-											</Grid>
-										</Border>
+                            Padding="0">
+						<Grid>
+							<!-- Content for the menu text etc -->
+							<ContentPresenter x:Name="HeaderHost"
+                                              RecognizesAccessKey="True"
+                                              ContentSource="Header" />
+							<!-- The Popup is the body of the menu which expands down -->
+							<Popup IsOpen="{Binding Path=IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}}"
+                                   Placement="Bottom"
+                                   x:Name="SubMenuPopup"
+                                   Focusable="false"
+                                   PopupAnimation="Fade"
+                                   AllowsTransparency="True">
+								<Border x:Name="SubMenuBorderTop"
+										Style="{StaticResource ResourceKey=CairoMenuBorderStyle}">
+									<Border x:Name="SubMenuBorder"
+											Style="{StaticResource ResourceKey=CairoMenuInnerBorderStyle}"
+											MinWidth="{DynamicResource ResourceKey=RunchMenuWidth}">
+										<Grid x:Name="SubMenu"
+											  Grid.IsSharedSizeScope="True">
+											<StackPanel IsItemsHost="True"
+														KeyboardNavigation.DirectionalNavigation="Cycle" />
+										</Grid>
 									</Border>
-								</Popup>
-							</Grid>
-						</Border>
+								</Border>
+							</Popup>
+						</Grid>
 					</Border>
-					<!-- These triggers re-configure the four arrangements of MenuItem to show different levels of menu via Role -->
-					<ControlTemplate.Triggers>
-						<DataTrigger Binding="{Binding Path=AppBarEdge, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Window}}}"
-									 Value="Bottom">
-							<DataTrigger.Setters>
-								<Setter Property="Margin"
-										TargetName="SubMenuBorderTop"
-										Value="11,11,5,0" />
-							</DataTrigger.Setters>
-						</DataTrigger>
-						<!-- Role = TopLevelHeader : this is the root menu item in a menu; the Popup expands down -->
-						<Trigger Property="Role"
-                                 Value="TopLevelHeader">
-							<Setter Property="Padding"
-                                    Value="2,0,2,0" />
-							<Setter Property="Margin"
-                                    Value="0,-2,0,0" />
-							<Setter Property="Placement"
-                                    Value="Bottom"
-                                    TargetName="SubMenuPopup" />
-							<Setter Property="Height"
-                                    Value="22" />
-						</Trigger>
-						<MultiTrigger>
-							<MultiTrigger.Conditions>
-								<Condition Property="Role"
-                                           Value="TopLevelHeader" />
-								<Condition Property="IsMouseOver"
-                                           Value="True" />
-								<Condition Property="IsSubmenuOpen"
-                                           Value="False" />
-							</MultiTrigger.Conditions>
-							<Setter Property="Background"
-                                    TargetName="Border"
-                                    Value="{DynamicResource ResourceKey=MenuHeaderHoverBackground}" />
-						</MultiTrigger>
-						<MultiTrigger>
-							<MultiTrigger.Conditions>
-								<Condition Property="Role"
-                                           Value="TopLevelHeader" />
-								<Condition Property="IsSubmenuOpen"
-                                           Value="True" />
-							</MultiTrigger.Conditions>
-							<Setter Property="Background"
-                                    TargetName="Border"
-                                    Value="{DynamicResource ResourceKey=MenuHeaderPressedGradient}" />
-						</MultiTrigger>
-					</ControlTemplate.Triggers>
 				</ControlTemplate>
 			</Setter.Value>
 		</Setter>
     </Style>
+    <!-- A menu bar button (action center): hover and press highlight like the tag bar -->
     <Style x:Key="CairoMenuItemButtonMenuStyle"
            TargetType="{x:Type MenuItem}">
         <Setter Property="Foreground"
-                Value="{Binding Path=Foreground, RelativeSource={RelativeSource AncestorType={x:Type Menu}}}" />
+                Value="{DynamicResource ResourceKey=MenuHeaderForeground}" />
+        <Setter Property="FontFamily"
+                Value="{DynamicResource ResourceKey=RunchFontFamily}" />
+        <Setter Property="FontSize"
+                Value="{DynamicResource ResourceKey=RunchFontSize}" />
         <Setter Property="Padding"
-                Value="2,0,2,0" />
-        <Setter Property="Margin"
-                Value="0,-2,0,0" />
-        <Setter Property="Height"
-                Value="22" />
+                Value="0" />
+        <Setter Property="Background"
+                Value="Transparent" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type MenuItem}">
                     <Border x:Name="ContainerBorder"
-                            Background="Transparent"
+                            Background="{TemplateBinding Background}"
                             BorderBrush="Transparent"
                             Padding="0">
                         <Border x:Name="Border">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto"
-                                                      SharedSizeGroup="MenuTextColumnGroup" />
-                                </Grid.ColumnDefinitions>
-                                <!-- Content for the menu text etc -->
-                                <ContentPresenter Grid.Column="0"
-                                                  Margin="{TemplateBinding Padding}"
-                                                  x:Name="HeaderHost"
-                                                  RecognizesAccessKey="True"
-                                                  ContentSource="Header" />
-                            </Grid>
+                            <ContentPresenter Margin="{TemplateBinding Padding}"
+                                              x:Name="HeaderHost"
+                                              VerticalAlignment="Center"
+                                              RecognizesAccessKey="True"
+                                              ContentSource="Header" />
                         </Border>
                     </Border>
-                    <!-- These triggers re-configure the four arrangements of MenuItem to show different levels of menu via Role -->
                     <ControlTemplate.Triggers>
                         <MultiTrigger>
                             <MultiTrigger.Conditions>
@@ -782,7 +664,6 @@
                                     TargetName="Border"
                                     Value="{DynamicResource ResourceKey=MenuHeaderHoverBackground}" />
                         </MultiTrigger>
-                        <!-- Role = TopLevelHeader : this is the root menu item in a menu; the Popup expands down -->
                         <Trigger Property="IsPressed"
                                  Value="true">
                             <Setter Property="Background"
@@ -794,92 +675,88 @@
             </Setter.Value>
         </Setter>
     </Style>
+    <!-- A coloured block on the right of the bar (systray, ram, cpu, clock). Background is the block colour;
+         like the quickshell widgets there is no hover highlight. Child items open in a flat menu below. -->
+    <Style x:Key="RunchBarMenuItemStyle"
+           TargetType="{x:Type MenuItem}">
+        <Setter Property="Foreground"
+                Value="{DynamicResource ResourceKey=RunchForeground}" />
+        <Setter Property="FontFamily"
+                Value="{DynamicResource ResourceKey=RunchFontFamily}" />
+        <Setter Property="FontSize"
+                Value="{DynamicResource ResourceKey=RunchFontSize}" />
+        <Setter Property="Padding"
+                Value="5,0,5,0" />
+        <Setter Property="Background"
+                Value="Transparent" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type MenuItem}">
+                    <Border x:Name="Border"
+                            Background="{TemplateBinding Background}"
+                            Padding="{TemplateBinding Padding}">
+                        <Grid>
+                            <ContentPresenter x:Name="HeaderHost"
+                                              VerticalAlignment="Center"
+                                              RecognizesAccessKey="True"
+                                              ContentSource="Header" />
+                            <Popup IsOpen="{Binding Path=IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}}"
+                                   PlacementTarget="{Binding ElementName=Border}"
+                                   Placement="Bottom"
+                                   x:Name="SubMenuPopup"
+                                   Focusable="False"
+                                   PopupAnimation="Fade"
+                                   AllowsTransparency="True">
+                                <Border Style="{StaticResource ResourceKey=CairoMenuBorderStyle}">
+                                    <Border Style="{StaticResource ResourceKey=CairoMenuInnerBorderStyle}">
+                                        <Grid Grid.IsSharedSizeScope="True">
+                                            <StackPanel IsItemsHost="True"
+                                                        KeyboardNavigation.DirectionalNavigation="Cycle" />
+                                        </Grid>
+                                    </Border>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
     <Style x:Key="CairoMenuItemCairoSearchMenuStyle"
            TargetType="{x:Type MenuItem}">
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type MenuItem}">
-                    <Border x:Name="ContainerBorder"
+                    <Border x:Name="Border"
                             Background="Transparent"
                             BorderBrush="Transparent"
-                            Padding="0,0,13,0">
-                        <Border x:Name="Border">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto"
-                                                      SharedSizeGroup="MenuTextColumnGroup" />
-                                </Grid.ColumnDefinitions>
-                                <!-- Content for the menu text etc -->
-                                <ContentPresenter Grid.Column="0"
-                                                  Margin="{TemplateBinding Padding}"
-                                                  x:Name="HeaderHost"
-                                                  RecognizesAccessKey="True"
-                                                  ContentSource="Header" />
-                                <!-- The Popup is the body of the menu which expands down or across depending on the level of the item -->
-                                <Popup IsOpen="{Binding Path=IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}}"
-                                       Placement="Left"
-                                       x:Name="SubMenuPopup"
-                                       Focusable="False"
-                                       PopupAnimation="Fade"
-                                       AllowsTransparency="True">
-                                    <Border Margin="5,0,13,11"
-											x:Name="SearchMenuContent">
-                                        <!-- StackPanel holds children of the menu. This is set by IsItemsHost=True -->
-                                        <StackPanel IsItemsHost="True"
-                                                    KeyboardNavigation.DirectionalNavigation="Cycle" />
-                                        <Border.Style>
-                                            <Style TargetType="{x:Type Border}">
-                                                <Setter Property="BorderBrush"
-                                                        Value="{DynamicResource ResourceKey=MenuTopBorderBrush}" />
-                                                <Setter Property="BorderThickness"
-                                                        Value="0,1,0,0" />
-                                                <Setter Property="Effect"
-                                                        Value="{DynamicResource ResourceKey=MenuShadow}" />
-												<Style.Triggers>
-													<DataTrigger Binding="{Binding Path=AppBarEdge, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Window}}}"
-																 Value="Bottom">
-														<DataTrigger.Setters>
-															<Setter Property="BorderThickness"
-																	Value="0,0,0,1" />
-															<Setter Property="Effect"
-																	Value="{DynamicResource ResourceKey=MenuShadowBottom}" />
-														</DataTrigger.Setters>
-													</DataTrigger>
-												</Style.Triggers>
-                                            </Style>
-                                        </Border.Style>
-                                    </Border>
-                                </Popup>
-                            </Grid>
-                        </Border>
+                            Padding="0">
+                        <Grid>
+                            <!-- Content for the menu text etc -->
+                            <ContentPresenter x:Name="HeaderHost"
+                                              VerticalAlignment="Center"
+                                              RecognizesAccessKey="True"
+                                              ContentSource="Header" />
+                            <!-- The Popup is the body of the menu which expands down -->
+                            <Popup IsOpen="{Binding Path=IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}}"
+                                   PlacementTarget="{Binding ElementName=Border}"
+                                   Placement="Bottom"
+                                   x:Name="SubMenuPopup"
+                                   Focusable="False"
+                                   PopupAnimation="Fade"
+                                   AllowsTransparency="True">
+                                <Border x:Name="SearchMenuContent"
+                                        Background="{DynamicResource ResourceKey=MenuBackgroundGradient}">
+                                    <!-- StackPanel holds children of the menu. This is set by IsItemsHost=True -->
+                                    <StackPanel IsItemsHost="True"
+                                                KeyboardNavigation.DirectionalNavigation="Cycle" />
+                                </Border>
+                            </Popup>
+                        </Grid>
                     </Border>
-                    <!-- These triggers re-configure the four arrangements of MenuItem to show different levels of menu via Role -->
                     <ControlTemplate.Triggers>
-						<DataTrigger Binding="{Binding Path=AppBarEdge, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Window}}}"
-									 Value="Bottom">
-							<DataTrigger.Setters>
-								<Setter Property="Margin"
-										TargetName="SearchMenuContent"
-										Value="5,11,13,0" />
-							</DataTrigger.Setters>
-						</DataTrigger>
-                        <!-- Role = TopLevelHeader : this is the root menu item in a menu; the Popup expands down -->
-                        <Trigger Property="Role"
-                                 Value="TopLevelHeader">
-                            <Setter Property="Padding"
-                                    Value="2,0,2,0" />
-                            <Setter Property="Margin"
-                                    Value="0,-2,0,0" />
-                            <Setter Property="Placement"
-                                    Value="Bottom"
-                                    TargetName="SubMenuPopup" />
-                            <Setter Property="Height"
-                                    Value="22" />
-                        </Trigger>
                         <MultiTrigger>
                             <MultiTrigger.Conditions>
-                                <Condition Property="Role"
-                                           Value="TopLevelHeader" />
                                 <Condition Property="IsMouseOver"
                                            Value="True" />
                                 <Condition Property="IsSubmenuOpen"
@@ -889,17 +766,12 @@
                                     TargetName="Border"
                                     Value="{DynamicResource ResourceKey=MenuHeaderHoverBackground}" />
                         </MultiTrigger>
-                        <MultiTrigger>
-                            <MultiTrigger.Conditions>
-                                <Condition Property="Role"
-                                           Value="TopLevelHeader" />
-                                <Condition Property="IsSubmenuOpen"
-                                           Value="True" />
-                            </MultiTrigger.Conditions>
+                        <Trigger Property="IsSubmenuOpen"
+                                 Value="True">
                             <Setter Property="Background"
                                     TargetName="Border"
                                     Value="{DynamicResource ResourceKey=MenuHeaderPressedGradient}" />
-                        </MultiTrigger>
+                        </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
@@ -923,25 +795,10 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type ContextMenu}">
-                    <Border>
-                        <Border.Style>
-                            <Style TargetType="{x:Type Border}">
-                                <Setter Property="Background"
-                                        Value="{DynamicResource ResourceKey=MenuBackgroundGradient}" />
-                                <Setter Property="BorderBrush"
-                                        Value="{DynamicResource ResourceKey=MenuBorderBrush}" />
-                                <Setter Property="BorderThickness"
-                                        Value="1" />
-                                <Setter Property="CornerRadius"
-                                        Value="5" />
-                                <Setter Property="Padding"
-                                        Value="0,3,0,3" />
-                                <Setter Property="Margin"
-                                        Value="5,0,5,11" />
-                                <Setter Property="Effect"
-                                        Value="{DynamicResource ResourceKey=MenuShadow}" />
-                            </Style>
-                        </Border.Style>
+                    <Border Background="{DynamicResource ResourceKey=MenuBackgroundGradient}"
+                            BorderBrush="{DynamicResource ResourceKey=MenuBorderBrush}"
+                            BorderThickness="0"
+                            Padding="0">
                         <Grid x:Name="SubMenu"
                               Grid.IsSharedSizeScope="True">
                             <!-- StackPanel holds children of the menu. This is set by IsItemsHost=True -->
@@ -964,7 +821,7 @@
                     <StackPanel>
                         <Border Width="auto"
                                 Height="1"
-                                Margin="4,3,4,3"
+                                Margin="0,2,0,2"
                                 Background="{DynamicResource ResourceKey=MenuSeparator}" />
                     </StackPanel>
                 </ControlTemplate>
@@ -2323,7 +2180,7 @@
         <Setter Property="Background"
                 Value="{DynamicResource NotifyBalloonBackground}" />
         <Setter Property="Margin"
-                Value="5,0" />
+                Value="2,0" />
         <Setter Property="Orientation"
                 Value="Horizontal" />
         <Style.Triggers>

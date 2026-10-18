@@ -6,6 +6,8 @@
              Unloaded="UserControl_Unloaded">
     <Menu Style="{StaticResource CairoMenuBarMainContainerStyle}">
         <MenuItem x:Name="ClockMenuItem"
+                  Style="{StaticResource RunchBarMenuItemStyle}"
+                  Background="{DynamicResource RunchClock}"
                   ItemContainerStyle="{StaticResource CairoMenuItemContainerStyle}"
                   SubmenuOpened="ClockMenuItem_SubmenuOpened">
             <MenuItem.Header>

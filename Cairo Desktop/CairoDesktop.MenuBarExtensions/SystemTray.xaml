@@ -5,8 +5,10 @@
              xmlns:local="clr-namespace:CairoDesktop.MenuBarExtensions"
              x:Class="CairoDesktop.MenuBarExtensions.SystemTray"
              x:Name="CairoSystemTray"
-             Height="23"
-             Margin="8,0,8,0"
+             Height="{DynamicResource RunchBarHeight}"
+             Background="{DynamicResource RunchSystray}"
+             Padding="1,0,1,0"
+             Margin="0"
              Loaded="CairoSystemTray_Loaded"
              Unloaded="CairoSystemTray_Unloaded">
     <UserControl.Resources>

@@ -4,11 +4,10 @@
              xmlns:l10n="clr-namespace:CairoDesktop.Common.Localization;assembly=CairoDesktop.Common"
              xmlns:control="clr-namespace:CairoDesktop.MenuBar"
              Focusable="False"
-             Height="22"
-             VerticalAlignment="Center">
+             Height="{DynamicResource RunchBarHeight}"
+             Background="{DynamicResource RunchDark}">
     <ItemsControl ItemsSource="{Binding Windows}"
-                  Focusable="False"
-                  Margin="0,0,6,0">
+                  Focusable="False">
         <ItemsControl.ItemsPanel>
             <ItemsPanelTemplate>
                 <control:WindowListPanel />
@@ -17,11 +16,10 @@
         <ItemsControl.ItemTemplate>
             <DataTemplate>
                 <Border x:Name="ItemBorder"
-                        Height="20"
-                        Margin="1,1,1,1"
-                        Padding="4,0"
-                        CornerRadius="2"
+                        Height="{DynamicResource RunchBarHeight}"
+                        Padding="8,0"
                         Background="Transparent"
+                        Cursor="Hand"
                         ToolTip="{Binding Title}"
                         MouseUp="Item_MouseUp">
                     <Border.ContextMenu>
@@ -48,10 +46,11 @@
                         </ContextMenu>
                     </Border.ContextMenu>
                     <DockPanel LastChildFill="True">
-                        <Image Source="{Binding Icon}"
+                        <Image x:Name="AppIcon"
+                               Source="{Binding Icon, TargetNullValue={StaticResource RunchWindowFallbackIcon}}"
                                Width="16"
                                Height="16"
-                               Margin="0,0,4,0"
+                               Margin="0,0,5,0"
                                VerticalAlignment="Center"
                                DockPanel.Dock="Left"
                                RenderOptions.BitmapScalingMode="HighQuality" />
@@ -60,15 +59,18 @@
                                    Margin="4,0,0,0"
                                    VerticalAlignment="Center"
                                    DockPanel.Dock="Right"
-                                   Foreground="{DynamicResource MenuHeaderForeground}"
+                                   FontFamily="{DynamicResource RunchFontFamily}"
+                                   FontSize="{DynamicResource RunchFontSize}"
+                                   Foreground="{DynamicResource RunchForeground}"
                                    Opacity="0.7"
                                    Visibility="Collapsed" />
                         <TextBlock x:Name="TitleText"
                                    Text="{Binding Title}"
                                    VerticalAlignment="Center"
                                    TextTrimming="CharacterEllipsis"
-                                   Foreground="{DynamicResource MenuHeaderForeground}"
-                                   Opacity="{DynamicResource TilingTagEmptyOpacity}" />
+                                   FontFamily="{DynamicResource RunchFontFamily}"
+                                   FontSize="{DynamicResource RunchFontSize}"
+                                   Foreground="{DynamicResource RunchForeground}" />
                     </DockPanel>
                 </Border>
                 <DataTemplate.Triggers>
@@ -77,10 +79,7 @@
                              Value="True">
                         <Setter TargetName="ItemBorder"
                                 Property="Background"
-                                Value="{DynamicResource MenuHeaderHoverBackground}" />
-                        <Setter TargetName="TitleText"
-                                Property="Opacity"
-                                Value="1" />
+                                Value="{DynamicResource RunchTopHover}" />
                     </Trigger>
                     <DataTrigger Binding="{Binding IsFloating}"
                                  Value="True">
@@ -92,10 +91,7 @@
                                  Value="True">
                         <Setter TargetName="ItemBorder"
                                 Property="Background"
-                                Value="{DynamicResource MenuItemHoverGradient}" />
-                        <Setter TargetName="TitleText"
-                                Property="Opacity"
-                                Value="1" />
+                                Value="{DynamicResource RunchTopSelected}" />
                     </DataTrigger>
                 </DataTemplate.Triggers>
             </DataTemplate>

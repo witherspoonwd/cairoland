@@ -66,7 +66,7 @@ namespace CairoDesktop.Tiling
             }
 
             User32.GetWindowThreadProcessId(hwnd, out uint pid);
-            if (pid == _ownPid)
+            if (pid == _ownPid && !TilingWindow.IsOwnWindowManaged(hwnd))
             {
                 return FilterResult.Ignore;
             }

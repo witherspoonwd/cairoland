@@ -134,7 +134,7 @@ namespace CairoDesktop.Tiling
 
             IntPtr foreground = User32.GetForegroundWindow();
             User32.GetWindowThreadProcessId(foreground, out uint foregroundPid);
-            if (foregroundPid == _ownPid)
+            if (foregroundPid == _ownPid && !_isManaged(foreground))
             {
                 // a Cairo menu or popup is open
                 return;

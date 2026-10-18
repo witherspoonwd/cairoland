@@ -3,6 +3,7 @@ using CairoDesktop.Application.Interfaces;
 using CairoDesktop.Common;
 using CairoDesktop.Infrastructure.Services;
 using CairoDesktop.Tiling;
+using System.Windows.Interop;
 
 namespace CairoDesktop.Services
 {
@@ -17,11 +18,12 @@ namespace CairoDesktop.Services
         private readonly WorkstationLockManager _lockManager;
         private readonly TilingHotKeyService _hotKeyService;
         private readonly Settings _settings;
+        private readonly ITilingManager _tilingManager;
 
         internal SettingsUI SettingsUi;
 
         public SettingsUIService(ICairoApplication cairoApplication, IAppGrabber appGrabber, IApplicationUpdateService updateService,
-            ShellManagerService shellManager, IThemeService themeService, ICommandService commandService, WorkstationLockManager lockManager, TilingHotKeyService hotKeyService, Settings settings)
+            ShellManagerService shellManager, IThemeService themeService, ICommandService commandService, WorkstationLockManager lockManager, TilingHotKeyService hotKeyService, Settings settings, ITilingManager tilingManager)
         {
             _appGrabber = appGrabber;
             _cairoApplication = cairoApplication;
@@ -32,6 +34,7 @@ namespace CairoDesktop.Services
             _lockManager = lockManager;
             _hotKeyService = hotKeyService;
             _settings = settings;
+            _tilingManager = tilingManager;
         }
 
         public void Show()
@@ -39,6 +42,12 @@ namespace CairoDesktop.Services
             if (SettingsUi == null)
             {
                 SettingsUi = new SettingsUI(_cairoApplication, this, _shellManager, _updateService, _appGrabber, _themeService, _commandService, _lockManager, _hotKeyService, _settings);
+            }
+            else if (_tilingManager.IsEnabled)
+            {
+                // the window may be on a hidden tag; switch to it rather than activating a hidden window
+                _tilingManager.FocusWindow(new WindowInteropHelper(SettingsUi).Handle);
+                return;
             }
 
             SettingsUi.Show();

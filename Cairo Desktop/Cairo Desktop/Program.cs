@@ -77,6 +77,7 @@ namespace CairoDesktop
                     services.AddSingleton<IThemeService, CairoApplicationThemeService>();
 
                     services.AddSingleton<ShellWindowService>();
+                    services.AddSingleton<FullScreenWatcher>();
                     services.AddSingleton<IWindowService, MenuBarWindowService>();
 
                     services.AddSingleton<HiddenWindowJournal>();

@@ -1,40 +1,44 @@
-﻿using ManagedShell.Common.Helpers;
+﻿using CairoDesktop.Interop;
+using ManagedShell.Common.Helpers;
 using System;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
+using System.Windows.Input;
 using System.Windows.Threading;
 
 namespace CairoDesktop.MenuBarExtensions
 {
     public partial class Volume : UserControl
     {
+        // the scroll wheel changes the volume in steps of 5%, like the runch quickshell bar
+        private const float VolumeStep = 0.05f;
+
         private bool _isLoaded;
-        private DispatcherTimer _volumeIconTimer;
+        private DispatcherTimer _volumeTimer;
 
         public Volume()
         {
             InitializeComponent();
         }
 
-        private void VolumeIcon_Tick()
+        private void Volume_Tick()
         {
-            if (VolumeHelper.IsVolumeMuted())
+            txtVolume.Text = (int)Math.Round(VolumeHelper.GetMasterVolume() * 100) + "%";
+        }
+
+        private void UserControl_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            if (e.Delta == 0)
             {
-                imgOpenVolume.Source = FindResource("VolumeMuteIcon") as ImageSource;
+                return;
             }
-            else if (VolumeHelper.GetMasterVolume() <= 0)
+
+            if (CoreAudio.AdjustMasterVolume(e.Delta > 0 ? VolumeStep : -VolumeStep))
             {
-                imgOpenVolume.Source = FindResource("VolumeOffIcon") as ImageSource;
+                Volume_Tick();
             }
-            else if (VolumeHelper.GetMasterVolume() < 0.5)
-            {
-                imgOpenVolume.Source = FindResource("VolumeLowIcon") as ImageSource;
-            }
-            else
-            {
-                imgOpenVolume.Source = FindResource("VolumeIcon") as ImageSource;
-            }
+
+            e.Handled = true;
         }
 
         private void miOpenVolume_Click(object sender, RoutedEventArgs e)
@@ -59,11 +63,11 @@ namespace CairoDesktop.MenuBarExtensions
                 return;
             }
 
-            VolumeIcon_Tick();
+            Volume_Tick();
 
-            _volumeIconTimer = new DispatcherTimer(new TimeSpan(0, 0, 0, 2), DispatcherPriority.Background, delegate
+            _volumeTimer = new DispatcherTimer(new TimeSpan(0, 0, 0, 1), DispatcherPriority.Background, delegate
             {
-                VolumeIcon_Tick();
+                Volume_Tick();
             }, Dispatcher);
 
             _isLoaded = true;
@@ -76,8 +80,8 @@ namespace CairoDesktop.MenuBarExtensions
                 return;
             }
 
-            _volumeIconTimer?.Stop();
-            _volumeIconTimer = null;
+            _volumeTimer?.Stop();
+            _volumeTimer = null;
 
             _isLoaded = false;
         }

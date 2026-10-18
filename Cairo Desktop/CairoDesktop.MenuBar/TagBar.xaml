@@ -2,12 +2,11 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              Focusable="False"
-             Height="22"
-             VerticalAlignment="Center"
+             Height="{DynamicResource RunchBarHeight}"
+             Background="{DynamicResource RunchDark}"
              PreviewMouseWheel="TagBar_PreviewMouseWheel">
     <ItemsControl ItemsSource="{Binding Tags}"
-                  Focusable="False"
-                  Margin="2,0,6,0">
+                  Focusable="False">
         <ItemsControl.ItemsPanel>
             <ItemsPanelTemplate>
                 <StackPanel Orientation="Horizontal" />
@@ -16,10 +15,8 @@
         <ItemsControl.ItemTemplate>
             <DataTemplate>
                 <Border x:Name="TagBorder"
-                        Width="22"
-                        Height="20"
-                        Margin="1,1,1,1"
-                        CornerRadius="2"
+                        Height="{DynamicResource RunchBarHeight}"
+                        Padding="4,0,4,0"
                         Background="Transparent"
                         Cursor="Hand">
                     <Border.InputBindings>
@@ -33,17 +30,18 @@
                                    Text="{Binding Label}"
                                    HorizontalAlignment="Center"
                                    VerticalAlignment="Center"
-                                   Foreground="{DynamicResource MenuHeaderForeground}"
-                                   Opacity="{DynamicResource TilingTagEmptyOpacity}" />
+                                   FontFamily="{DynamicResource RunchFontFamily}"
+                                   FontSize="{DynamicResource RunchFontSize}"
+                                   Foreground="{DynamicResource RunchForeground}" />
+                        <!-- underline marking a tag that has windows -->
                         <Rectangle x:Name="OccupiedMark"
                                    Height="2"
-                                   Width="10"
                                    RadiusX="1"
                                    RadiusY="1"
                                    VerticalAlignment="Bottom"
-                                   HorizontalAlignment="Center"
-                                   Margin="0,0,0,1"
-                                   Fill="{DynamicResource MenuHeaderForeground}"
+                                   HorizontalAlignment="Stretch"
+                                   Margin="0,0,0,2"
+                                   Fill="{DynamicResource RunchWindowIndicator}"
                                    Visibility="Collapsed" />
                     </Grid>
                 </Border>
@@ -53,13 +51,10 @@
                              Value="True">
                         <Setter TargetName="TagBorder"
                                 Property="Background"
-                                Value="{DynamicResource MenuHeaderHoverBackground}" />
+                                Value="{DynamicResource RunchTopHover}" />
                     </Trigger>
                     <DataTrigger Binding="{Binding IsOccupied}"
                                  Value="True">
-                        <Setter TargetName="TagLabel"
-                                Property="Opacity"
-                                Value="1" />
                         <Setter TargetName="OccupiedMark"
                                 Property="Visibility"
                                 Value="Visible" />
@@ -69,21 +64,15 @@
                         <Setter TargetName="TagBorder"
                                 Property="Background"
                                 Value="{DynamicResource TilingTagUrgentBackground}" />
-                        <Setter TargetName="TagLabel"
-                                Property="Opacity"
-                                Value="1" />
                     </DataTrigger>
                     <DataTrigger Binding="{Binding IsSelected}"
                                  Value="True">
                         <Setter TargetName="TagBorder"
                                 Property="Background"
-                                Value="{DynamicResource MenuItemHoverGradient}" />
-                        <Setter TargetName="TagLabel"
-                                Property="FontWeight"
-                                Value="Bold" />
-                        <Setter TargetName="TagLabel"
-                                Property="Opacity"
-                                Value="1" />
+                                Value="{DynamicResource RunchTopSelected}" />
+                        <Setter TargetName="OccupiedMark"
+                                Property="Fill"
+                                Value="{DynamicResource RunchWindowIndicatorSelected}" />
                     </DataTrigger>
                 </DataTemplate.Triggers>
             </DataTemplate>

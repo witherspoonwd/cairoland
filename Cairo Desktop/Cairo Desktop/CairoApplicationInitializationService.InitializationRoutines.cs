@@ -100,6 +100,7 @@ namespace CairoDesktop
             }
 
             _host.Services.GetService<Services.ShellWindowService>()?.Initialize();
+            _host.Services.GetService<Services.FullScreenWatcher>()?.Initialize();
             _host.Services.GetService<IWindowManager>()?.InitialSetup();
         }
     }

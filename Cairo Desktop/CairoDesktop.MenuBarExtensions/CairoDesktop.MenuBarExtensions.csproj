@@ -14,4 +14,12 @@
     <ProjectReference Include="..\CairoDesktop.Interop\CairoDesktop.Interop.csproj" />
   </ItemGroup>
 
+  <ItemGroup Condition="'$(TargetFramework)' == 'net480'">
+    <Reference Include="System.Management" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' != 'net480'">
+    <PackageReference Include="System.Management" Version="8.0.0" />
+  </ItemGroup>
+
 </Project>

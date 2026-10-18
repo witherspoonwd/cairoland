@@ -44,7 +44,7 @@ namespace CairoDesktop.MenuBar
 
         private static readonly int[] GapChoices = { 0, 4, 6, 10, 16 };
 
-        public MenuBar(ICairoApplication cairoApplication, AppBarEventService appBarEventService, ShellManager shellManager, IWindowManager windowManager, IApplicationUpdateService applicationUpdateService, ISettingsUIService settingsUiService, ICommandService commandService, ITilingManager tilingManager, Settings settings, AppBarScreen screen, AppBarEdge edge, AppBarMode mode) : base(cairoApplication, shellManager, windowManager, screen, edge, mode, 23)
+        public MenuBar(ICairoApplication cairoApplication, AppBarEventService appBarEventService, ShellManager shellManager, IWindowManager windowManager, IApplicationUpdateService applicationUpdateService, ISettingsUIService settingsUiService, ICommandService commandService, ITilingManager tilingManager, Settings settings, AppBarScreen screen, AppBarEdge edge, AppBarMode mode) : base(cairoApplication, shellManager, windowManager, screen, edge, mode, 26)
         {
             _appBarEventService = appBarEventService;
             _applicationUpdateService = applicationUpdateService;

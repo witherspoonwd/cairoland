@@ -17,6 +17,7 @@ namespace CairoDesktop.Tiling
     public sealed class TilingManager : ITilingManager, IDisposable
     {
         private const double ResizeStep = 0.05;
+        private const int CursorPollIntervalMs = 100;
 
         private readonly ILogger<TilingManager> _logger;
         private readonly Settings _settings;
@@ -26,6 +27,7 @@ namespace CairoDesktop.Tiling
         private readonly WindowFilter _filter;
         private readonly WinEventListener _listener = new WinEventListener();
         private readonly FocusFollowsMouse _focusFollowsMouse;
+        private readonly WindowDragger _dragger;
         private readonly WorkstationLockManager _lockManager;
         private readonly WindowAnimations _animations;
 
@@ -36,6 +38,11 @@ namespace CairoDesktop.Tiling
         private bool _layoutQueued;
         private IntPtr _moveSizeHwnd;
         private Dispatcher _dispatcher;
+
+        // the mouse moved onto a screen showing an empty tag, so that screen has focus until something is activated
+        private MonitorState _mouseFocusedMonitor;
+        private MonitorState _lastCursorMonitor;
+        private DispatcherTimer _cursorTimer;
 
         public bool IsEnabled { get; private set; }
 
@@ -52,6 +59,15 @@ namespace CairoDesktop.Tiling
             _animations = new WindowAnimations(journal);
             _filter = new WindowFilter(settings);
             _focusFollowsMouse = new FocusFollowsMouse(settings, hwnd => _windows.ContainsKey(hwnd));
+
+            // a modifier drag goes through the same paths as a title bar drag
+            _dragger = new WindowDragger(settings, CanDrag,
+                hwnd => _moveSizeHwnd = hwnd,
+                hwnd =>
+                {
+                    _moveSizeHwnd = IntPtr.Zero;
+                    OnMoveSizeEnd(hwnd);
+                });
 
             _listener.WindowEvent += Listener_WindowEvent;
         }
@@ -123,6 +139,12 @@ namespace CairoDesktop.Tiling
                 _dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() => LockPolicyPrompt.ShowIfNeeded(_lockManager)));
             }
             _focusFollowsMouse.Enable();
+            _dragger.Enable();
+
+            _lastCursorMonitor = GetCursorMonitor();
+            _cursorTimer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(CursorPollIntervalMs) };
+            _cursorTimer.Tick += CursorTimer_Tick;
+            _cursorTimer.Start();
 
             foreach (MonitorState monitor in _monitors)
             {
@@ -145,7 +167,18 @@ namespace CairoDesktop.Tiling
 
             _listener.Stop();
             _focusFollowsMouse.Disable();
+            _dragger.Disable();
             _lockManager.Disable();
+
+            if (_cursorTimer != null)
+            {
+                _cursorTimer.Stop();
+                _cursorTimer.Tick -= CursorTimer_Tick;
+                _cursorTimer = null;
+            }
+
+            _mouseFocusedMonitor = null;
+            _lastCursorMonitor = null;
 
             foreach (ManagedWindow window in _windows.Values)
             {
@@ -268,9 +301,17 @@ namespace CairoDesktop.Tiling
             return PrimaryMonitor;
         }
 
-        /// <summary>The monitor of the foreground window, falling back to the cursor's monitor.</summary>
+        /// <summary>
+        /// The empty screen the mouse moved onto, else the monitor of the foreground window, falling back to the
+        /// cursor's monitor.
+        /// </summary>
         private MonitorState GetFocusedMonitor()
         {
+            if (_mouseFocusedMonitor != null)
+            {
+                return _mouseFocusedMonitor;
+            }
+
             IntPtr foreground = User32.GetForegroundWindow();
             if (foreground != IntPtr.Zero)
             {
@@ -358,6 +399,30 @@ namespace CairoDesktop.Tiling
             return best;
         }
 
+        /// <summary>
+        /// Focus follows mouse for screens: moving onto a screen whose tag is empty focuses that screen, so tag
+        /// shortcuts act on it. There's no window there for Windows to activate, so this is tracked here.
+        /// </summary>
+        private void CursorTimer_Tick(object sender, EventArgs e)
+        {
+            if (!_settings.EnableFocusFollowsMouse
+                || User32.GetAsyncKeyState(User32.VK_LBUTTON) < 0 || User32.GetAsyncKeyState(User32.VK_RBUTTON) < 0)
+            {
+                return;
+            }
+
+            MonitorState cursor = GetCursorMonitor();
+            if (cursor == null || cursor == _lastCursorMonitor)
+            {
+                return;
+            }
+
+            _lastCursorMonitor = cursor;
+
+            // only on entering a screen, so keyboard focus changes (Alt+Tab) while the mouse rests here still win
+            _mouseFocusedMonitor = cursor.TagSet.SelectedTag.VisibleWindows.Any() ? null : cursor;
+        }
+
         private void WindowManager_ScreensChanged(object sender, WindowManagerEventArgs e)
         {
             if (!IsEnabled)
@@ -404,6 +469,16 @@ namespace CairoDesktop.Tiling
                 _logger.LogDebug($"Tiling: monitor removed {removed.DeviceName}");
                 _monitors.Remove(removed);
                 ClearViewModel(removed.ViewModel);
+
+                if (_mouseFocusedMonitor == removed)
+                {
+                    _mouseFocusedMonitor = null;
+                }
+
+                if (_lastCursorMonitor == removed)
+                {
+                    _lastCursorMonitor = null;
+                }
 
                 MonitorState primary = PrimaryMonitor;
                 if (primary == null)
@@ -457,6 +532,7 @@ namespace CairoDesktop.Tiling
                     Unmanage(e.Hwnd);
                     break;
                 case WinEventKind.Foreground:
+                    _mouseFocusedMonitor = null;
                     OnForeground(e.Hwnd);
                     break;
                 case WinEventKind.MoveSizeStart:
@@ -683,6 +759,16 @@ namespace CairoDesktop.Tiling
             MarkDirty(monitor);
         }
 
+        private bool CanDrag(IntPtr hwnd)
+        {
+            // elevated windows ignore our moves; maximized ones would drag their maximized frame around
+            return IsEnabled
+                && _windows.TryGetValue(hwnd, out ManagedWindow window)
+                && !window.IsInaccessible
+                && !User32.IsIconic(hwnd)
+                && !User32.IsZoomed(hwnd);
+        }
+
         private void OnNameChanged(IntPtr hwnd)
         {
             if (_windows.TryGetValue(hwnd, out ManagedWindow window))
@@ -901,8 +987,10 @@ namespace CairoDesktop.Tiling
 
         private ManagedWindow GetFocusedWindow()
         {
+            // while an empty screen has focus, the foreground window on another screen isn't the focused window
             IntPtr foreground = User32.GetForegroundWindow();
-            if (_windows.TryGetValue(foreground, out ManagedWindow window))
+            ManagedWindow window;
+            if (_mouseFocusedMonitor == null && _windows.TryGetValue(foreground, out window))
             {
                 return window;
             }
@@ -1330,7 +1418,7 @@ namespace CairoDesktop.Tiling
                     return;
                 }
             }
-            else if (window == null || window.IsFloating)
+            else if (window != null ? window.IsFloating : monitor.TagSet.SelectedTag.VisibleWindows.Any())
             {
                 FocusTag(monitor);
                 return;

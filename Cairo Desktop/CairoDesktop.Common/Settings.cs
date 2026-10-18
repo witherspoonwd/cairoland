@@ -366,15 +366,18 @@ namespace CairoDesktop.Common
         #endregion
 
         #region Advanced
+        // the clock format of the runch quickshell bar
+        private const string DefaultTimeFormat = "MM.dd.yy HH:mm:ss";
+
         private string _timeFormat;
         public string TimeFormat
         {
             get
             {
-                // if Null or Empty, get CurrentCulture
+                // if Null or Empty, use the default
                 if (string.IsNullOrEmpty(_timeFormat))
                 {
-                    _timeFormat = $"ddd {CultureInfo.CurrentCulture.DateTimeFormat.ShortTimePattern}";
+                    _timeFormat = DefaultTimeFormat;
                 }
 
                 return _timeFormat;
@@ -383,7 +386,7 @@ namespace CairoDesktop.Common
             {
                 if (string.IsNullOrEmpty(value))
                 {
-                    Set(ref _timeFormat, $"ddd {CultureInfo.CurrentCulture.DateTimeFormat.ShortTimePattern}");
+                    Set(ref _timeFormat, DefaultTimeFormat);
                 }
                 else if (_timeFormat != value)
                 {
