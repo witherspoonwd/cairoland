@@ -278,13 +278,25 @@ namespace CairoDesktop.Tiling.Commands
                 }
             }
 
+            return RunCommandLine(command);
+        }
+
+        /// <summary>
+        /// Runs <paramref name="command"/> like the Windows Run dialog: environment variables are expanded and the target
+        /// is shell-executed, so programs on the path, App Paths aliases, folders and URLs all work.
+        /// </summary>
+        public static bool RunCommandLine(string command, bool asAdmin = false)
+        {
             if (string.IsNullOrWhiteSpace(command))
             {
                 return false;
             }
 
             TilingLaunchTerminalCommand.SplitCommand(Environment.ExpandEnvironmentVariables(command.Trim()), out string fileName, out string arguments);
-            return ShellHelper.StartProcess(fileName, arguments);
+
+            // the Run dialog starts commands in the user profile rather than the shell's own directory
+            string workingDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            return ShellHelper.StartProcess(fileName, arguments, asAdmin ? "runas" : string.Empty, workingDirectory);
         }
     }
 

@@ -883,5 +883,11 @@ namespace CairoDesktop.Common.Localization
         public static string sLauncher_Placeholder => getString();
 
         public static string sLauncher_NoResults => getString();
+
+        public static string sLauncher_RunPrompt => getString();
+
+        public static string sLauncher_RunCommand => getString();
+
+        public static string sLauncher_RunFailed => getString();
     }
 }

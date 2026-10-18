@@ -19,6 +19,9 @@ namespace CairoDesktop.Tiling
         private const double ResizeStep = 0.05;
         private const int CursorPollIntervalMs = 100;
 
+        // how long the user must be at the computer with a monitor gone before its windows move elsewhere
+        private const int ReconnectGraceMs = 15000;
+
         private readonly ILogger<TilingManager> _logger;
         private readonly Settings _settings;
         private readonly IWindowManager _windowManager;
@@ -32,17 +35,25 @@ namespace CairoDesktop.Tiling
         private readonly WindowAnimations _animations;
 
         private readonly List<MonitorState> _monitors = new List<MonitorState>();
+        // disconnected monitors, kept with their tags so a monitor that wakes from sleep gets its windows back
+        private readonly List<MonitorState> _parkedMonitors = new List<MonitorState>();
         private readonly Dictionary<IntPtr, ManagedWindow> _windows = new Dictionary<IntPtr, ManagedWindow>();
         private readonly Dictionary<string, ScreenTagsViewModel> _viewModels = new Dictionary<string, ScreenTagsViewModel>();
         private readonly HashSet<MonitorState> _dirty = new HashSet<MonitorState>();
         private bool _layoutQueued;
         private IntPtr _moveSizeHwnd;
+        private int _lastDisplayChangeTick;
         private Dispatcher _dispatcher;
 
-        // the mouse moved onto a screen showing an empty tag, so that screen has focus until something is activated
+        // the mouse moved onto a screen showing an empty tag or onto its desktop, so that screen has focus until
+        // something is activated
         private MonitorState _mouseFocusedMonitor;
         private MonitorState _lastCursorMonitor;
         private DispatcherTimer _cursorTimer;
+
+        // the last app window to have focus, given it back when the desktop is activated
+        private IntPtr _lastForeground;
+        private IntPtr _restoringForeground;
 
         public bool IsEnabled { get; private set; }
 
@@ -120,7 +131,7 @@ namespace CairoDesktop.Tiling
             found.Reverse();
             foreach (IntPtr hwnd in found)
             {
-                TryManage(hwnd, focus: false);
+                TryManage(hwnd, focus: false, atCursor: false);
             }
 
             IsEnabled = true;
@@ -175,6 +186,8 @@ namespace CairoDesktop.Tiling
 
             _mouseFocusedMonitor = null;
             _lastCursorMonitor = null;
+            _lastForeground = IntPtr.Zero;
+            _restoringForeground = IntPtr.Zero;
 
             foreach (ManagedWindow window in _windows.Values)
             {
@@ -194,6 +207,7 @@ namespace CairoDesktop.Tiling
 
             _windows.Clear();
             _monitors.Clear();
+            _parkedMonitors.Clear();
             _dirty.Clear();
 
             EnabledChanged?.Invoke(this, EventArgs.Empty);
@@ -396,11 +410,13 @@ namespace CairoDesktop.Tiling
         }
 
         /// <summary>
-        /// Focus follows mouse for screens: moving onto a screen whose tag is empty focuses that screen, so tag
-        /// shortcuts act on it. There's no window there for Windows to activate, so this is tracked here.
+        /// Focus follows mouse for screens: moving onto a screen whose tag is empty, or onto its desktop, focuses that
+        /// screen, so tag shortcuts act on it. The desktop never takes focus itself, so this is tracked here.
         /// </summary>
         private void CursorTimer_Tick(object sender, EventArgs e)
         {
+            MergeParkedMonitors();
+
             if (!_settings.EnableFocusFollowsMouse
                 || User32.GetAsyncKeyState(User32.VK_LBUTTON) < 0 || User32.GetAsyncKeyState(User32.VK_RBUTTON) < 0)
             {
@@ -416,7 +432,7 @@ namespace CairoDesktop.Tiling
             _lastCursorMonitor = cursor;
 
             // only on entering a screen, so keyboard focus changes (Alt+Tab) while the mouse rests here still win
-            _mouseFocusedMonitor = cursor.TagSet.SelectedTag.VisibleWindows.Any() ? null : cursor;
+            _mouseFocusedMonitor = !cursor.TagSet.SelectedTag.VisibleWindows.Any() || TilingWindow.IsDesktopUnderCursor() ? cursor : null;
         }
 
         private void WindowManager_ScreensChanged(object sender, WindowManagerEventArgs e)
@@ -442,29 +458,43 @@ namespace CairoDesktop.Tiling
 
         private void ReconcileMonitors()
         {
+            _lastDisplayChangeTick = Environment.TickCount;
             List<AppBarScreen> screens = GetScreens();
+            HashSet<MonitorState> present = new HashSet<MonitorState>();
 
             foreach (AppBarScreen screen in screens)
             {
-                MonitorState existing = _monitors.FirstOrDefault(m => m.DeviceName == screen.DeviceName);
-                if (existing != null)
+                // match the physical monitor, not the device name, which can move to another monitor on reconnect
+                string key = MonitorState.GetKey(screen.DeviceName);
+                MonitorState monitor = _monitors.FirstOrDefault(m => !present.Contains(m) && m.Key == key);
+                if (monitor != null)
                 {
-                    existing.SetScreen(screen);
+                    monitor.SetScreen(screen);
+                }
+                else if ((monitor = _parkedMonitors.FirstOrDefault(m => m.Key == key)) != null)
+                {
+                    _logger.LogDebug($"Tiling: monitor reconnected {screen.DeviceName}");
+                    _parkedMonitors.Remove(monitor);
+                    monitor.SetScreen(screen);
+                    _monitors.Add(monitor);
+                    Unpark(monitor);
                 }
                 else
                 {
                     _logger.LogDebug($"Tiling: monitor added {screen.DeviceName}");
-                    MonitorState added = new MonitorState(screen, GetOrCreateViewModel(screen.DeviceName));
-                    added.ViewModel.IsActive = true;
-                    _monitors.Add(added);
+                    monitor = new MonitorState(screen, GetOrCreateViewModel(screen.DeviceName));
+                    _monitors.Add(monitor);
                 }
+
+                present.Add(monitor);
             }
 
-            foreach (MonitorState removed in _monitors.Where(m => screens.All(s => s.DeviceName != m.DeviceName)).ToList())
+            foreach (MonitorState removed in _monitors.Where(m => !present.Contains(m)).ToList())
             {
+                // monitors drop off while asleep or locked; keep their tags until they come back
                 _logger.LogDebug($"Tiling: monitor removed {removed.DeviceName}");
                 _monitors.Remove(removed);
-                ClearViewModel(removed.ViewModel);
+                _parkedMonitors.Add(removed);
 
                 if (_mouseFocusedMonitor == removed)
                 {
@@ -475,30 +505,105 @@ namespace CairoDesktop.Tiling
                 {
                     _lastCursorMonitor = null;
                 }
+            }
 
-                MonitorState primary = PrimaryMonitor;
-                if (primary == null)
+            RebindViewModels();
+
+            foreach (MonitorState monitor in _monitors)
+            {
+                MarkDirty(monitor);
+            }
+        }
+
+        /// <summary>Points each monitor at the menu bar model for its current device name.</summary>
+        private void RebindViewModels()
+        {
+            foreach (MonitorState monitor in _monitors)
+            {
+                monitor.ViewModel = GetOrCreateViewModel(monitor.DeviceName);
+                monitor.ViewModel.IsActive = true;
+            }
+
+            foreach (ScreenTagsViewModel model in _viewModels.Values)
+            {
+                if (_monitors.All(m => m.ViewModel != model))
                 {
+                    ClearViewModel(model);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Puts a reconnected monitor's windows back: Windows moved them onto the remaining screens while it was gone.
+        /// </summary>
+        private void Unpark(MonitorState monitor)
+        {
+            foreach (long id in monitor.TagSet.Windows.ToList())
+            {
+                IntPtr hwnd = new IntPtr(id);
+                if (!_windows.TryGetValue(hwnd, out ManagedWindow window) || _monitors.Any(m => m != monitor && m.TagSet.Contains(id)))
+                {
+                    monitor.TagSet.RemoveWindow(id);
                     continue;
                 }
 
-                // move each tag's windows to the same tag on the primary monitor
+                window.HMonitor = monitor.HMonitor;
+                SyncVisibility(monitor, id);
+
+                if (window.IsFloating && window.FloatingRect.HasValue && monitor.TagSet.GetTagIndex(id) == monitor.TagSet.SelectedIndex)
+                {
+                    WindowArranger.MoveTo(hwnd, window.FloatingRect.Value);
+                }
+            }
+        }
+
+        /// <summary>
+        /// A monitor that stays gone while the user is at the computer was unplugged: move its windows to the same
+        /// tags on the primary monitor. Waiting for input keeps monitors that sleep for hours parked until they wake.
+        /// </summary>
+        private void MergeParkedMonitors()
+        {
+            if (_parkedMonitors.Count == 0 || Environment.TickCount - _lastDisplayChangeTick < ReconnectGraceMs)
+            {
+                return;
+            }
+
+            User32.LASTINPUTINFO input = User32.LASTINPUTINFO.Create();
+            if (!User32.GetLastInputInfo(ref input) || unchecked((int)input.dwTime - _lastDisplayChangeTick) < ReconnectGraceMs)
+            {
+                return;
+            }
+
+            MonitorState primary = PrimaryMonitor;
+            if (primary == null)
+            {
+                return;
+            }
+
+            foreach (MonitorState removed in _parkedMonitors)
+            {
+                _logger.LogDebug($"Tiling: monitor {removed.DeviceName} didn't come back; moving its windows to {primary.DeviceName}");
+
                 foreach (Tag tag in removed.TagSet.Tags)
                 {
                     foreach (long id in tag.AllWindows.ToList())
                     {
                         WindowState state = removed.TagSet.GetState(id) ?? WindowState.Tiled;
                         removed.TagSet.RemoveWindow(id);
+                        if (!_windows.TryGetValue(new IntPtr(id), out ManagedWindow window) || primary.TagSet.Contains(id))
+                        {
+                            continue;
+                        }
+
+                        window.HMonitor = primary.HMonitor;
                         primary.TagSet.AddWindow(id, tag.Index, state);
                         SyncVisibility(primary, id);
                     }
                 }
             }
 
-            foreach (MonitorState monitor in _monitors)
-            {
-                MarkDirty(monitor);
-            }
+            _parkedMonitors.Clear();
+            MarkDirty(primary);
         }
 
         #endregion
@@ -530,7 +635,20 @@ namespace CairoDesktop.Tiling
                     OnDestroyed(e.Hwnd);
                     break;
                 case WinEventKind.Foreground:
-                    _mouseFocusedMonitor = null;
+                    if (TilingWindow.IsDesktopWindow(e.Hwnd))
+                    {
+                        OnDesktopForeground();
+                        break;
+                    }
+
+                    // handing focus back from the desktop keeps the screen the mouse chose
+                    if (e.Hwnd != _restoringForeground)
+                    {
+                        _mouseFocusedMonitor = null;
+                    }
+
+                    _restoringForeground = IntPtr.Zero;
+                    _lastForeground = e.Hwnd;
                     OnForeground(e.Hwnd);
                     break;
                 case WinEventKind.MoveSizeStart:
@@ -575,7 +693,7 @@ namespace CairoDesktop.Tiling
                 return;
             }
 
-            TryManage(hwnd, focus: true);
+            TryManage(hwnd, focus: true, atCursor: true);
         }
 
         /// <summary>
@@ -697,6 +815,37 @@ namespace CairoDesktop.Tiling
             }
 
             Unmanage(hwnd);
+        }
+
+        /// <summary>
+        /// The desktop never keeps focus: hovering or clicking it gives focus back to the last app window, and only
+        /// picks the screen tag shortcuts act on.
+        /// </summary>
+        private void OnDesktopForeground()
+        {
+            MonitorState cursor = GetCursorMonitor();
+            if (cursor != null)
+            {
+                _mouseFocusedMonitor = cursor;
+            }
+
+            IntPtr hwnd = _lastForeground;
+            if (hwnd == IntPtr.Zero || !User32.IsWindow(hwnd) || !User32.IsWindowVisible(hwnd) || User32.IsIconic(hwnd))
+            {
+                return;
+            }
+
+            // after the activation settles, or Windows may finish activating the desktop over us
+            _dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+            {
+                if (!IsEnabled || _lastForeground != hwnd || !TilingWindow.IsDesktopWindow(User32.GetForegroundWindow()))
+                {
+                    return;
+                }
+
+                _restoringForeground = hwnd;
+                WindowArranger.Focus(hwnd, raise: false);
+            }));
         }
 
         private void OnForeground(IntPtr hwnd)
@@ -891,7 +1040,7 @@ namespace CairoDesktop.Tiling
             // some windows get their title after they are shown
             if (User32.IsWindowVisible(hwnd))
             {
-                TryManage(hwnd, focus: false);
+                TryManage(hwnd, focus: false, atCursor: true);
             }
         }
 
@@ -964,7 +1113,11 @@ namespace CairoDesktop.Tiling
             return false;
         }
 
-        private bool TryManage(IntPtr hwnd, bool focus)
+        /// <summary>
+        /// Starts managing <paramref name="hwnd"/>. New windows (<paramref name="atCursor"/>) go to the selected tag of the
+        /// monitor under the cursor wherever Windows opened them; windows adopted at startup stay on their monitor.
+        /// </summary>
+        private bool TryManage(IntPtr hwnd, bool focus, bool atCursor)
         {
             if (_windows.ContainsKey(hwnd))
             {
@@ -977,10 +1130,17 @@ namespace CairoDesktop.Tiling
                 return false;
             }
 
-            MonitorState monitor = GetMonitorForWindow(hwnd);
+            MonitorState opened = GetMonitorForWindow(hwnd);
+            MonitorState monitor = atCursor ? GetCursorMonitor() : opened;
             if (monitor == null)
             {
                 return false;
+            }
+
+            // a minimized window's position is its icon's, not where it restores to
+            if (opened != null && opened != monitor && !User32.IsIconic(hwnd))
+            {
+                MoveOntoMonitor(hwnd, opened, monitor);
             }
 
             ManagedWindow window = new ManagedWindow(hwnd)
@@ -1019,6 +1179,33 @@ namespace CairoDesktop.Tiling
             return true;
         }
 
+        /// <summary>
+        /// Moves a window Windows opened on <paramref name="from"/> onto <paramref name="to"/>, keeping its offset in the
+        /// work area but keeping it inside <paramref name="to"/>. Tiled windows are laid out again anyway, but floating
+        /// ones keep wherever they are when managed. Windows covering their monitor are moved to cover the new one.
+        /// </summary>
+        private static void MoveOntoMonitor(IntPtr hwnd, MonitorState from, MonitorState to)
+        {
+            RectI rect = WindowArranger.GetVisibleRect(hwnd);
+            RectI moved;
+
+            if (rect == from.Bounds)
+            {
+                moved = to.Bounds;
+            }
+            else
+            {
+                RectI area = to.WorkArea;
+                int w = Math.Min(rect.W, area.W);
+                int h = Math.Min(rect.H, area.H);
+                int x = Math.Max(area.X, Math.Min(rect.X - from.WorkArea.X + area.X, area.Right - w));
+                int y = Math.Max(area.Y, Math.Min(rect.Y - from.WorkArea.Y + area.Y, area.Bottom - h));
+                moved = new RectI(x, y, w, h);
+            }
+
+            WindowArranger.MoveTo(hwnd, moved);
+        }
+
         private void Unmanage(IntPtr hwnd)
         {
             if (!_windows.TryGetValue(hwnd, out ManagedWindow window))
@@ -1034,6 +1221,11 @@ namespace CairoDesktop.Tiling
             }
 
             monitor?.TagSet.RemoveWindow(window.Id);
+            foreach (MonitorState parked in _parkedMonitors)
+            {
+                parked.TagSet.RemoveWindow(window.Id);
+            }
+
             _windows.Remove(hwnd);
             _arranger.Forget(hwnd);
             WindowIconHelper.Forget(hwnd);

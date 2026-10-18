@@ -98,6 +98,38 @@ namespace CairoDesktop.Interop
             }
         }
 
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        public struct DISPLAY_DEVICE
+        {
+            public int cb;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+            public string DeviceName;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
+            public string DeviceString;
+            public uint StateFlags;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
+            public string DeviceID;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
+            public string DeviceKey;
+
+            public static DISPLAY_DEVICE Create()
+            {
+                return new DISPLAY_DEVICE { cb = Marshal.SizeOf(typeof(DISPLAY_DEVICE)) };
+            }
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct LASTINPUTINFO
+        {
+            public uint cbSize;
+            public uint dwTime;
+
+            public static LASTINPUTINFO Create()
+            {
+                return new LASTINPUTINFO { cbSize = (uint)Marshal.SizeOf(typeof(LASTINPUTINFO)) };
+            }
+        }
+
         #endregion
 
         #region Constants
@@ -229,6 +261,10 @@ namespace CairoDesktop.Interop
 
         // errors
         public const int ERROR_ACCESS_DENIED = 5;
+
+        // EnumDisplayDevices
+        public const uint EDD_GET_DEVICE_INTERFACE_NAME = 0x00000001;
+        public const uint DISPLAY_DEVICE_ACTIVE = 0x00000001;
 
         #endregion
 
@@ -395,6 +431,10 @@ namespace CairoDesktop.Interop
         [DllImport(User32_DllName)]
         public static extern IntPtr WindowFromPoint(POINT point);
 
+        [DllImport(User32_DllName, CharSet = CharSet.Unicode)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool EnumDisplayDevices(string lpDevice, uint iDevNum, ref DISPLAY_DEVICE lpDisplayDevice, uint dwFlags);
+
         #endregion
 
         #region Messages and icons
@@ -466,6 +506,10 @@ namespace CairoDesktop.Interop
         [DllImport(User32_DllName, SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool LockWorkStation();
+
+        [DllImport(User32_DllName)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool GetLastInputInfo(ref LASTINPUTINFO plii);
 
         #endregion
     }

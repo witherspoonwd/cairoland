@@ -320,7 +320,10 @@ namespace CairoDesktop.Common.Localization
             { "sSettings_Tiling_Focus", "Focus" },
             { "sSettings_Tiling_Keyboard", "Keyboard" },
             { "sLauncher_Placeholder", "Search programs" },
-            { "sLauncher_NoResults", "No matching programs" }
+            { "sLauncher_NoResults", "No matching programs" },
+            { "sLauncher_RunPrompt", "Type a command to run" },
+            { "sLauncher_RunCommand", "Run: {0}" },
+            { "sLauncher_RunFailed", "Couldn't run: {0}" }
         };
 
         public static Dictionary<string, string> pt_BR = new Dictionary<string, string>

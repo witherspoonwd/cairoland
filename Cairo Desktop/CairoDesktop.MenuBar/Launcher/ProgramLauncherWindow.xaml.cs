@@ -1,7 +1,9 @@
 using CairoDesktop.AppGrabber;
 using CairoDesktop.Common;
+using CairoDesktop.Common.Localization;
 using CairoDesktop.Interop;
 using CairoDesktop.Tiling;
+using CairoDesktop.Tiling.Commands;
 using CairoDesktop.Tiling.Core;
 using ManagedShell.AppBar;
 using System;
@@ -34,6 +36,7 @@ namespace CairoDesktop.MenuBar.Launcher
     {
         private const int MaxResults = 10;
         private const int TopMarginDip = 8;
+        private const string RunPrefix = "/run";
 
         private readonly ProgramIndex _index;
         private readonly LaunchHistory _history;
@@ -111,8 +114,33 @@ namespace CairoDesktop.MenuBar.Launcher
             Dispatcher.BeginInvoke(new Action(UpdateResults));
         }
 
+        /// <summary>
+        /// Returns whether the search box holds a "/run COMMAND" line, giving the command (possibly empty) to run.
+        /// </summary>
+        private bool TryGetRunCommand(out string command)
+        {
+            string text = SearchBox.Text.TrimStart();
+            bool isRun = text.StartsWith(RunPrefix, StringComparison.OrdinalIgnoreCase)
+                && (text.Length == RunPrefix.Length || char.IsWhiteSpace(text[RunPrefix.Length]));
+
+            command = isRun ? text.Substring(RunPrefix.Length).Trim() : null;
+            return isRun;
+        }
+
         private void UpdateResults()
         {
+            if (TryGetRunCommand(out string command))
+            {
+                ResultsList.ItemsSource = null;
+                ResultsList.Visibility = Visibility.Collapsed;
+                NoResultsText.Visibility = Visibility.Collapsed;
+                ShowRunCommandText(command.Length == 0 ? DisplayString.sLauncher_RunPrompt : string.Format(DisplayString.sLauncher_RunCommand, command), dimmed: command.Length == 0);
+                return;
+            }
+
+            RunCommandText.Visibility = Visibility.Collapsed;
+            ResultsList.Visibility = Visibility.Visible;
+
             string query = SearchBox.Text;
             List<LauncherEntry> ranked = FuzzyMatcher.Rank(query, _index.Entries, entry => entry.Name, entry => entry.ExeName, entry => _history.Frecency(entry.Key));
 
@@ -138,8 +166,39 @@ namespace CairoDesktop.MenuBar.Launcher
             ResultsList.ScrollIntoView(ResultsList.SelectedItem);
         }
 
+        private void ShowRunCommandText(string text, bool dimmed)
+        {
+            RunCommandText.Text = text;
+            RunCommandText.Opacity = dimmed ? 0.55 : 1.0;
+            RunCommandText.Visibility = Visibility.Visible;
+        }
+
+        private void RunCommand(string command, bool asAdmin)
+        {
+            if (command.Length == 0)
+            {
+                return;
+            }
+
+            // run before closing so a failure can be reported here; elevation prompts deactivate and close the launcher anyway
+            if (RunCommandCommand.RunCommandLine(command, asAdmin))
+            {
+                CloseLauncher();
+            }
+            else if (!_isClosing)
+            {
+                ShowRunCommandText(string.Format(DisplayString.sLauncher_RunFailed, command), dimmed: true);
+            }
+        }
+
         private void Launch(bool asAdmin)
         {
+            if (TryGetRunCommand(out string command))
+            {
+                RunCommand(command, asAdmin);
+                return;
+            }
+
             if (!(ResultsList.SelectedItem is LauncherResult result))
             {
                 return;

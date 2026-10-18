@@ -146,8 +146,10 @@ namespace CairoDesktop.Tiling
                 return;
             }
 
-            // a destroyed window's HwndSource may already be gone; the manager ignores windows it never knew
-            if (kind != WinEventKind.Destroyed && _ownHooks.Contains(hWinEventHook) && !TilingWindow.IsOwnWindowManaged(hwnd))
+            // a destroyed window's HwndSource may already be gone; the manager ignores windows it never knew.
+            // Our desktop windows getting activated is let through so the manager can hand focus back.
+            if (kind != WinEventKind.Destroyed && _ownHooks.Contains(hWinEventHook) && !TilingWindow.IsOwnWindowManaged(hwnd)
+                && !(kind == WinEventKind.Foreground && TilingWindow.IsDesktopWindow(hwnd)))
             {
                 return;
             }

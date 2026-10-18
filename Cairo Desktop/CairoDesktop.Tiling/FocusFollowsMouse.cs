@@ -29,6 +29,10 @@ namespace CairoDesktop.Tiling
         private DateTime _pollCandidateSince;
         private int _suspendCount;
 
+        // native mode: Windows would activate the desktop under the cursor, so tracking is off while over it
+        private DispatcherTimer _desktopTimer;
+        private bool _overDesktop;
+
         public bool IsEnabled { get; private set; }
 
         private bool IsNative => IsEnabled && _pollTimer == null;
@@ -68,9 +72,14 @@ namespace CairoDesktop.Tiling
             SaveSystemValues();
 
             // fWinIni = 0 so nothing is written to the user profile
-            Set(User32.SPI_SETACTIVEWINDOWTRACKING, _suspendCount == 0);
+            _overDesktop = TilingWindow.IsDesktopUnderCursor();
+            UpdateTracking();
             Set(User32.SPI_SETACTIVEWNDTRKZORDER, _settings.FocusFollowsMouseRaise);
             User32.SystemParametersInfo(User32.SPI_SETACTIVEWNDTRKTIMEOUT, 0, new IntPtr(_settings.FocusFollowsMouseDelayMs), 0);
+
+            _desktopTimer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(PollIntervalMs) };
+            _desktopTimer.Tick += DesktopTimer_Tick;
+            _desktopTimer.Start();
         }
 
         public void Disable()
@@ -82,6 +91,14 @@ namespace CairoDesktop.Tiling
                 _pollTimer = null;
             }
 
+            if (_desktopTimer != null)
+            {
+                _desktopTimer.Stop();
+                _desktopTimer.Tick -= DesktopTimer_Tick;
+                _desktopTimer = null;
+            }
+
+            _overDesktop = false;
             RestoreSystemValues();
             IsEnabled = false;
         }
@@ -92,9 +109,9 @@ namespace CairoDesktop.Tiling
         /// </summary>
         public void Suspend()
         {
-            if (_suspendCount++ == 0 && IsNative)
+            if (_suspendCount++ == 0)
             {
-                Set(User32.SPI_SETACTIVEWINDOWTRACKING, false);
+                UpdateTracking();
             }
         }
 
@@ -105,9 +122,27 @@ namespace CairoDesktop.Tiling
                 return;
             }
 
-            if (--_suspendCount == 0 && IsNative)
+            if (--_suspendCount == 0)
             {
-                Set(User32.SPI_SETACTIVEWINDOWTRACKING, true);
+                UpdateTracking();
+            }
+        }
+
+        private void UpdateTracking()
+        {
+            if (IsNative)
+            {
+                Set(User32.SPI_SETACTIVEWINDOWTRACKING, _suspendCount == 0 && !_overDesktop);
+            }
+        }
+
+        private void DesktopTimer_Tick(object sender, EventArgs e)
+        {
+            bool overDesktop = TilingWindow.IsDesktopUnderCursor();
+            if (overDesktop != _overDesktop)
+            {
+                _overDesktop = overDesktop;
+                UpdateTracking();
             }
         }
 

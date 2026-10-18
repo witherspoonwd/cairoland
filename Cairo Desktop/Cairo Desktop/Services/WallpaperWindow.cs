@@ -1,4 +1,5 @@
 using CairoDesktop.Common;
+using CairoDesktop.Tiling;
 using ManagedShell.AppBar;
 using ManagedShell.Common.Helpers;
 using ManagedShell.Common.Logging;
@@ -62,6 +63,8 @@ namespace CairoDesktop.Services
             ShowActivated = false;
             Focusable = false;
             UseLayoutRounding = true;
+            // under Shell Launcher this is a top-level window that focus follows mouse would otherwise activate
+            TilingWindow.SetIsDesktop(this, true);
             Background = Brushes.Black;
 
             SourceInitialized += OnSourceInitialized;

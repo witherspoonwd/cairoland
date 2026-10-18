@@ -116,6 +116,12 @@
                        Foreground="{DynamicResource MenuItemForeground}"
                        Opacity="0.55"
                        Visibility="Collapsed" />
+            <TextBlock x:Name="RunCommandText"
+                       Margin="8,8,8,6"
+                       FontSize="13"
+                       TextTrimming="CharacterEllipsis"
+                       Foreground="{DynamicResource MenuItemForeground}"
+                       Visibility="Collapsed" />
         </StackPanel>
     </Border>
 </Window>

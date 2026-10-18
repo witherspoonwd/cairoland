@@ -5,6 +5,7 @@ using ManagedShell.AppBar;
 using ManagedShell.Common.Helpers;
 using ManagedShell.Common.SupportingClasses;
 using Microsoft.Extensions.Logging;
+using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -59,6 +60,8 @@ namespace CairoDesktop.Services
 
             _windowManager.ScreensChanged += ScreensChanged;
             _settings.PropertyChanged += Settings_PropertyChanged;
+            SystemEvents.SessionSwitch += SessionSwitch;
+            SystemEvents.PowerModeChanged += PowerModeChanged;
 
             CreateWallpaperWindows();
         }
@@ -126,23 +129,63 @@ namespace CairoDesktop.Services
 
         private void ResetPosition(bool displaysChanged)
         {
-            ShellWindow?.SetSize();
-
-            if (displaysChanged)
+            if (ShellWindow == null)
             {
-                DestroyWallpaperWindows();
-                CreateWallpaperWindows();
                 return;
             }
 
+            ShellWindow.SetSize();
+
+            if (ShellHost.IsShellLauncher)
+            {
+                // CustomShellHost shows its desktop again on display changes, covering ours
+                HideHostDesktop();
+            }
+
+            if (displaysChanged)
+            {
+                RecreateWallpaperWindows();
+                return;
+            }
+
+            // not reported as a display change doesn't mean the screens are the same ones: displays waking from sleep
+            // can come back under other device names, so make sure every screen has its own window
             List<AppBarScreen> screens = AppBarScreen.FromAllScreens();
+            if (screens.Count != _wallpaperWindows.Count || screens.Any(s => _wallpaperWindows.All(w => w.Screen.DeviceName != s.DeviceName)))
+            {
+                RecreateWallpaperWindows();
+                return;
+            }
+
             foreach (WallpaperWindow window in _wallpaperWindows)
             {
-                AppBarScreen screen = screens.FirstOrDefault(s => s.DeviceName == window.Screen.DeviceName);
-                if (screen != null)
-                {
-                    window.SetScreen(screen);
-                }
+                window.SetScreen(screens.First(s => s.DeviceName == window.Screen.DeviceName));
+            }
+        }
+
+        private void RecreateWallpaperWindows()
+        {
+            DestroyWallpaperWindows();
+            CreateWallpaperWindows();
+        }
+
+        /// <summary>
+        /// Displays power off while locked or idle, and WPF windows that weren't redrawn since can come back blank,
+        /// so start over with fresh wallpaper windows once the user is back.
+        /// </summary>
+        private void SessionSwitch(object sender, SessionSwitchEventArgs e)
+        {
+            if (e.Reason == SessionSwitchReason.SessionUnlock || e.Reason == SessionSwitchReason.ConsoleConnect || e.Reason == SessionSwitchReason.RemoteConnect)
+            {
+                System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(() => ResetPosition(true)));
+            }
+        }
+
+        private void PowerModeChanged(object sender, PowerModeChangedEventArgs e)
+        {
+            if (e.Mode == PowerModes.Resume)
+            {
+                System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(() => ResetPosition(true)));
             }
         }
 
@@ -187,6 +230,8 @@ namespace CairoDesktop.Services
 
             _windowManager.ScreensChanged -= ScreensChanged;
             _settings.PropertyChanged -= Settings_PropertyChanged;
+            SystemEvents.SessionSwitch -= SessionSwitch;
+            SystemEvents.PowerModeChanged -= PowerModeChanged;
             DestroyWallpaperWindows();
             RestoreHostDesktop();
 

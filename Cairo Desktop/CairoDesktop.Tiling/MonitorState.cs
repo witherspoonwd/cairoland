@@ -18,9 +18,16 @@ namespace CairoDesktop.Tiling
 
         public IntPtr HMonitor => Screen.HMonitor;
 
+        /// <summary>
+        /// Identifies the physical monitor across reconnects, which can hand out device names (\\.\DISPLAYn) in a
+        /// different order.
+        /// </summary>
+        public string Key { get; private set; }
+
         public TagSet TagSet { get; } = new TagSet();
 
-        public ScreenTagsViewModel ViewModel { get; }
+        /// <summary>The menu bar model for <see cref="DeviceName"/>, rebound when the device name changes.</summary>
+        public ScreenTagsViewModel ViewModel { get; set; }
 
         public RectI Bounds { get; private set; }
 
@@ -39,7 +46,28 @@ namespace CairoDesktop.Tiling
         public void SetScreen(AppBarScreen screen)
         {
             Screen = screen;
+            Key = GetKey(screen.DeviceName);
             RefreshWorkArea();
+        }
+
+        /// <summary>
+        /// The device interface path of the monitor attached to <paramref name="deviceName"/>, which comes from its
+        /// hardware ID and connector; the device name itself when that can't be read.
+        /// </summary>
+        public static string GetKey(string deviceName)
+        {
+            User32.DISPLAY_DEVICE device = User32.DISPLAY_DEVICE.Create();
+            for (uint i = 0; User32.EnumDisplayDevices(deviceName, i, ref device, User32.EDD_GET_DEVICE_INTERFACE_NAME); i++)
+            {
+                if ((device.StateFlags & User32.DISPLAY_DEVICE_ACTIVE) != 0 && !string.IsNullOrEmpty(device.DeviceID))
+                {
+                    return device.DeviceID;
+                }
+
+                device = User32.DISPLAY_DEVICE.Create();
+            }
+
+            return deviceName;
         }
 
         /// <summary>
