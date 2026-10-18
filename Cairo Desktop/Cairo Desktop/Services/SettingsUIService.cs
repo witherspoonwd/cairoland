@@ -19,11 +19,14 @@ namespace CairoDesktop.Services
         private readonly TilingHotKeyService _hotKeyService;
         private readonly Settings _settings;
         private readonly ITilingManager _tilingManager;
+        private readonly SetupCheckService _setupCheck;
 
         internal SettingsUI SettingsUi;
 
+        internal SetupCheckService SetupCheck => _setupCheck;
+
         public SettingsUIService(ICairoApplication cairoApplication, IAppGrabber appGrabber, IApplicationUpdateService updateService,
-            ShellManagerService shellManager, IThemeService themeService, ICommandService commandService, WorkstationLockManager lockManager, TilingHotKeyService hotKeyService, Settings settings, ITilingManager tilingManager)
+            ShellManagerService shellManager, IThemeService themeService, ICommandService commandService, WorkstationLockManager lockManager, TilingHotKeyService hotKeyService, Settings settings, ITilingManager tilingManager, SetupCheckService setupCheck)
         {
             _appGrabber = appGrabber;
             _cairoApplication = cairoApplication;
@@ -35,6 +38,7 @@ namespace CairoDesktop.Services
             _hotKeyService = hotKeyService;
             _settings = settings;
             _tilingManager = tilingManager;
+            _setupCheck = setupCheck;
         }
 
         public void Show()

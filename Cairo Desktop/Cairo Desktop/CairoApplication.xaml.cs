@@ -16,6 +16,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using CairoDesktop.Infrastructure.Options;
 using CairoDesktop.Infrastructure.Services;
+using CairoDesktop.SupportingClasses;
 using CairoDesktop.Tiling;
 using ManagedShell.Common.SupportingClasses; // Required for StartupRunner; excluded from debug builds
 using Microsoft.Extensions.Options; // Required for StartupRunner; excluded from debug builds
@@ -102,7 +103,8 @@ namespace CairoDesktop
                 _logger.LogError($"Unable to read restart command line option: {ex.Message}");
             }
 
-            if (EnvironmentHelper.IsAppRunningAsShell && !isRestart)
+            // Shell Launcher runs the Run and RunOnce keys itself before starting the shell
+            if (EnvironmentHelper.IsAppRunningAsShell && !isRestart && !ShellHost.IsShellLauncher)
             {
                 StartupRunner runner = new StartupRunner();
                 runner.Run();
@@ -122,8 +124,9 @@ namespace CairoDesktop
             if (EnvironmentHelper.IsAppRunningAsShell)
             {
                 // WinLogon will automatically launch the local machine shell if AutoRestartShell is enabled and the shell window process exits with code 0.
-                // Setting the exit code to 1 indicates that we are shutting down intentionally and do not want the local machine shell to restart
-                e.ApplicationExitCode = 1;
+                // Setting the exit code to 1 indicates that we are shutting down intentionally and do not want the local machine shell to restart.
+                // Under Shell Launcher, 1 maps to DoNothing and 3 (a restart we asked for) to RestartShell.
+                e.ApplicationExitCode = _requestedExitCode ?? ShellHost.StopExitCode;
             }
 
             RestoreTiledWindows();
@@ -143,6 +146,9 @@ namespace CairoDesktop
         }
 
         private bool _errorVisible;
+
+        // exit code to keep in shell mode instead of the default
+        private int? _requestedExitCode;
 
         /// <summary>
         /// Shows windows the tiling manager hid and restores the lock policy. Safe from any thread.
@@ -198,7 +204,10 @@ namespace CairoDesktop
                     {
                         RestoreTiledWindows();
                         RestartCairo();
-                        Environment.FailFast("Automatically restarted Cairo due to a render thread failure.");
+                        if (!ShellHost.IsShellLauncher)
+                        {
+                            Environment.FailFast("Automatically restarted Cairo due to a render thread failure.");
+                        }
                     }
                     else
                     {
@@ -207,7 +216,10 @@ namespace CairoDesktop
                             // it's like getting a morning coffee.
                             RestoreTiledWindows();
                             RestartCairo();
-                            Environment.FailFast("User restarted Cairo due to an exception.");
+                            if (!ShellHost.IsShellLauncher)
+                            {
+                                Environment.FailFast("User restarted Cairo due to an exception.");
+                            }
                         }
                     }
 
@@ -244,6 +256,16 @@ namespace CairoDesktop
 
         public void RestartCairo()
         {
+            if (ShellHost.IsShellLauncher)
+            {
+                // Shell Launcher only restarts the process it started; ask it to with the RestartShell code
+                RestoreTiledWindows();
+                CrashLoopGuard.Reset();
+                _requestedExitCode = ShellHost.RestartExitCode;
+                ExitCairo();
+                return;
+            }
+
             try
             {
                 // run the program again

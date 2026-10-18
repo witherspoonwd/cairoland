@@ -15,6 +15,9 @@ namespace CairoDesktop.Tiling
     {
         private static readonly TimeSpan ExpectedEventLifetime = TimeSpan.FromSeconds(2);
 
+        // where Windows itself puts minimized windows; off every monitor
+        private const int ParkedPosition = -32000;
+
         private readonly HiddenWindowJournal _journal;
         private readonly Dictionary<IntPtr, DateTime> _expectedShow = new Dictionary<IntPtr, DateTime>();
         private readonly Dictionary<IntPtr, DateTime> _expectedHide = new Dictionary<IntPtr, DateTime>();
@@ -155,7 +158,61 @@ namespace CairoDesktop.Tiling
 
         #region Visibility
 
-        public void Hide(IntPtr hwnd)
+        public void Hide(ManagedWindow window)
+        {
+            if (window.HideMode == HideMode.Offscreen)
+            {
+                Park(window.Hwnd);
+                return;
+            }
+
+            Hide(window.Hwnd);
+        }
+
+        public void Show(ManagedWindow window)
+        {
+            // also covers a window whose hide mode changed while it was parked
+            if (_journal.IsParked(window.Hwnd))
+            {
+                Unpark(window.Hwnd);
+                return;
+            }
+
+            Show(window.Hwnd);
+        }
+
+        /// <summary>
+        /// Moves a window far off screen, keeping it shown. The original rect goes into the journal so a crash
+        /// can't leave it there.
+        /// </summary>
+        private void Park(IntPtr hwnd)
+        {
+            if (!User32.GetWindowRect(hwnd, out User32.RECT rect))
+            {
+                return;
+            }
+
+            _journal.AddParked(hwnd, rect);
+            ShellLogger.Debug($"WindowArranger: Parking 0x{hwnd.ToInt64():X} off screen");
+            User32.SetWindowPos(hwnd, IntPtr.Zero, ParkedPosition, ParkedPosition, 0, 0,
+                User32.SWP_NOSIZE | User32.SWP_NOZORDER | User32.SWP_NOACTIVATE | User32.SWP_NOOWNERZORDER);
+        }
+
+        private void Unpark(IntPtr hwnd)
+        {
+            HiddenWindowJournal.ParkedWindow parked = _journal.RemoveParked(hwnd);
+            if (parked == null)
+            {
+                return;
+            }
+
+            // the next layout places tiled windows; this puts floating ones back where they were
+            ShellLogger.Debug($"WindowArranger: Bringing 0x{hwnd.ToInt64():X} back on screen");
+            User32.SetWindowPos(hwnd, IntPtr.Zero, parked.X, parked.Y, parked.W, parked.H,
+                User32.SWP_NOZORDER | User32.SWP_NOACTIVATE | User32.SWP_NOOWNERZORDER);
+        }
+
+        private void Hide(IntPtr hwnd)
         {
             Expect(_expectedHide, hwnd);
             _journal.AddHidden(hwnd);
@@ -165,7 +222,7 @@ namespace CairoDesktop.Tiling
             User32.ShowWindow(hwnd, User32.SW_HIDE);
         }
 
-        public void Show(IntPtr hwnd)
+        private void Show(IntPtr hwnd)
         {
             Expect(_expectedShow, hwnd);
             ShellLogger.Debug($"WindowArranger: Showing 0x{hwnd.ToInt64():X}");
@@ -205,6 +262,16 @@ namespace CairoDesktop.Tiling
             _expectedShow.Remove(hwnd);
             _expectedHide.Remove(hwnd);
             _journal.RemoveHidden(hwnd);
+
+            // a window we stop managing must not stay off screen
+            if (_journal.IsParked(hwnd) && User32.IsWindow(hwnd))
+            {
+                Unpark(hwnd);
+            }
+            else
+            {
+                _journal.RemoveParked(hwnd);
+            }
         }
 
         #endregion

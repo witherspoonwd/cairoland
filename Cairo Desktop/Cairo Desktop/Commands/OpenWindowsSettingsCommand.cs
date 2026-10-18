@@ -1,5 +1,6 @@
 ﻿using CairoDesktop.Application.Interfaces;
 using CairoDesktop.Application.Structs;
+using CairoDesktop.Common;
 using CairoDesktop.Common.Localization;
 using ManagedShell.Common.Helpers;
 using System.Collections.Generic;
@@ -26,7 +27,7 @@ namespace CairoDesktop.Commands
 
         public string Label => DisplayString.sCairoMenu_WindowsSettings;
 
-        public bool IsAvailable => EnvironmentHelper.IsWindows10OrBetter && !EnvironmentHelper.IsAppRunningAsShell;
+        public bool IsAvailable => EnvironmentHelper.IsWindows10OrBetter && ShellHost.HasImmersiveShell;
 
         public IReadOnlyCollection<CairoCommandParameter> Parameters => null;
     }

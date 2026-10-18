@@ -117,7 +117,7 @@ namespace CairoDesktop.Tiling.ViewModels
                 if (!_iconLoaded)
                 {
                     _iconLoaded = true;
-                    _icon = WindowIconHelper.GetIcon(Window.Hwnd, Window.ClassName);
+                    _icon = WindowIconHelper.GetIcon(Window);
                 }
 
                 return _icon;
@@ -170,6 +170,12 @@ namespace CairoDesktop.Tiling.ViewModels
             if (e.PropertyName == nameof(ManagedWindow.Title))
             {
                 OnPropertyChanged(nameof(Title));
+            }
+            else if (e.PropertyName == nameof(ManagedWindow.AppUserModelId))
+            {
+                // a UWP frame's app was found after the window appeared
+                _iconLoaded = false;
+                OnPropertyChanged(nameof(Icon));
             }
         }
 

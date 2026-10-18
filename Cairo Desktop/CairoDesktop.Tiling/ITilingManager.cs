@@ -61,6 +61,12 @@ namespace CairoDesktop.Tiling
         void FocusWindow(IntPtr hwnd);
 
         /// <summary>
+        /// Pauses focus follows mouse until the result is disposed, for transient windows that close when
+        /// deactivated. Must be called on the UI thread.
+        /// </summary>
+        IDisposable SuspendFocusFollowsMouse();
+
+        /// <summary>
         /// Shows every window hidden by the tiling manager and restores the lock policy. Safe to call from any
         /// thread, including crash handlers.
         /// </summary>

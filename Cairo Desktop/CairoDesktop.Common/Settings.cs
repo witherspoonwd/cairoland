@@ -88,11 +88,35 @@ namespace CairoDesktop.Common
             set => Set(ref _isFirstRun, value);
         }
 
+        // the Setup check problems the user dismissed; it opens again at startup only when they change
+        private string _setupCheckDismissed = "";
+        public string SetupCheckDismissed
+        {
+            get => _setupCheckDismissed;
+            set => Set(ref _setupCheckDismissed, value ?? "");
+        }
+
         private string _theme = "Default";
         public string Theme
         {
             get => _theme;
             set => Set(ref _theme, value);
+        }
+
+        // image Cairo paints behind the desktop when it's the shell; empty uses the Windows wallpaper
+        private string _desktopBackgroundPath = "";
+        public string DesktopBackgroundPath
+        {
+            get => _desktopBackgroundPath;
+            set => Set(ref _desktopBackgroundPath, value ?? "");
+        }
+
+        // Fill, Fit, Stretch, Center or Tile; applies to DesktopBackgroundPath only
+        private string _desktopBackgroundStyle = "Fill";
+        public string DesktopBackgroundStyle
+        {
+            get => _desktopBackgroundStyle;
+            set => Set(ref _desktopBackgroundStyle, string.IsNullOrEmpty(value) ? "Fill" : value);
         }
 
         private string _language = "";
@@ -258,6 +282,14 @@ namespace CairoDesktop.Common
         {
             get => _enableTilingOutsideShell;
             set => Set(ref _enableTilingOutsideShell, value);
+        }
+
+        // UWP frames on hidden tags are moved off screen instead of hidden (SW_HIDE), for apps that come back blank
+        private bool _tilingParkUwpWindows = false;
+        public bool TilingParkUwpWindows
+        {
+            get => _tilingParkUwpWindows;
+            set => Set(ref _tilingParkUwpWindows, value);
         }
 
         private int _tilingGap = 6;

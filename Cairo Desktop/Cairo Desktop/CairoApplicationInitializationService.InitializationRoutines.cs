@@ -35,20 +35,28 @@ namespace CairoDesktop
         {
             bool forceNoShell = false;
             bool forceShell = false;
+            bool shellLauncher = false;
 
             try
             {
                 forceNoShell = _options.CurrentValue.NoShell;
                 forceShell = _options.CurrentValue.Shell;
+                shellLauncher = _options.CurrentValue.ShellLauncher;
             }
             catch (Exception e)
             {
                 _logger.LogError($"Unable to read shell command line options: {e.Message}");
             }
 
+            if (!forceNoShell)
+            {
+                ShellHost.Initialize(shellLauncher);
+            }
+
             // check if there is an existing shell window. If not, we will assume the role of shell.
-            EnvironmentHelper.IsAppRunningAsShell = (NativeMethods.GetShellWindow() == IntPtr.Zero && !forceNoShell) || forceShell;
-            _logger.LogInformation($"Running as shell: {EnvironmentHelper.IsAppRunningAsShell}; UI access: {UIAccess.IsActive}");
+            // Under Shell Launcher, CustomShellHost may already own one, but Cairo is still the shell.
+            EnvironmentHelper.IsAppRunningAsShell = (NativeMethods.GetShellWindow() == IntPtr.Zero && !forceNoShell) || forceShell || ShellHost.IsShellLauncher;
+            _logger.LogInformation($"Running as shell: {EnvironmentHelper.IsAppRunningAsShell}; Shell Launcher: {ShellHost.IsShellLauncher} (configured: {ShellHost.IsConfiguredAsShellLauncher}); UI access: {UIAccess.IsActive}");
         }
 
         void IInitializationService.LoadCommands()

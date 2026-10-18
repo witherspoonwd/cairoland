@@ -27,8 +27,11 @@ namespace CairoDesktop.Tiling
         private DispatcherTimer _pollTimer;
         private IntPtr _pollCandidate;
         private DateTime _pollCandidateSince;
+        private int _suspendCount;
 
         public bool IsEnabled { get; private set; }
+
+        private bool IsNative => IsEnabled && _pollTimer == null;
 
         public FocusFollowsMouse(Settings settings, Func<IntPtr, bool> isManaged)
         {
@@ -65,7 +68,7 @@ namespace CairoDesktop.Tiling
             SaveSystemValues();
 
             // fWinIni = 0 so nothing is written to the user profile
-            Set(User32.SPI_SETACTIVEWINDOWTRACKING, true);
+            Set(User32.SPI_SETACTIVEWINDOWTRACKING, _suspendCount == 0);
             Set(User32.SPI_SETACTIVEWNDTRKZORDER, _settings.FocusFollowsMouseRaise);
             User32.SystemParametersInfo(User32.SPI_SETACTIVEWNDTRKTIMEOUT, 0, new IntPtr(_settings.FocusFollowsMouseDelayMs), 0);
         }
@@ -81,6 +84,31 @@ namespace CairoDesktop.Tiling
 
             RestoreSystemValues();
             IsEnabled = false;
+        }
+
+        /// <summary>
+        /// Stops focus from following the mouse until a matching <see cref="Resume"/>, so a transient Cairo window
+        /// such as the program launcher is not deactivated when the cursor lands on another window. Calls nest.
+        /// </summary>
+        public void Suspend()
+        {
+            if (_suspendCount++ == 0 && IsNative)
+            {
+                Set(User32.SPI_SETACTIVEWINDOWTRACKING, false);
+            }
+        }
+
+        public void Resume()
+        {
+            if (_suspendCount == 0)
+            {
+                return;
+            }
+
+            if (--_suspendCount == 0 && IsNative)
+            {
+                Set(User32.SPI_SETACTIVEWINDOWTRACKING, true);
+            }
         }
 
         private void SaveSystemValues()
@@ -127,6 +155,11 @@ namespace CairoDesktop.Tiling
 
         private void PollTimer_Tick(object sender, EventArgs e)
         {
+            if (_suspendCount > 0)
+            {
+                return;
+            }
+
             if (User32.GetAsyncKeyState(User32.VK_LBUTTON) < 0 || User32.GetAsyncKeyState(User32.VK_RBUTTON) < 0 || User32.GetAsyncKeyState(User32.VK_MBUTTON) < 0)
             {
                 return;

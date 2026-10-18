@@ -59,5 +59,59 @@
                 </ScrollViewer>
             </DockPanel>
         </Border>
+        <Border Style="{StaticResource CairoWindowContainer}" Name="bdrSetupCheck" Visibility="Collapsed" Padding="0,0,0,32">
+            <DockPanel LastChildFill="True">
+                <StackPanel HorizontalAlignment="Center" DockPanel.Dock="Bottom" Orientation="Horizontal">
+                    <Button Name="btnCheckAgain" Content="{Binding sSetupCheck_CheckAgain}" Style="{StaticResource CairoButtonStyle}"
+                            Click="btnCheckAgain_Click" Margin="0,0,10,0" />
+                    <Button Name="btnSetupDone" Content="{Binding sSetupCheck_Done}" Style="{StaticResource CairoButtonStyle}"
+                            Click="btnSetupDone_Click" IsDefault="True" />
+                </StackPanel>
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Margin="0,0,0,5">
+                    <StackPanel VerticalAlignment="Top" HorizontalAlignment="Stretch" Orientation="Vertical" Margin="0,54,0,0">
+                        <TextBlock Style="{StaticResource WelcomeHeading}" Text="{Binding sSetupCheck_Title}" />
+                        <TextBlock Style="{StaticResource WelcomeText}" Text="{Binding sSetupCheck_Intro}" />
+                        <TextBlock Style="{StaticResource WelcomeSubText}" Name="txtSetupCheckRunning" Text="{Binding sSetupCheck_Running}" />
+                        <ItemsControl Name="lstSetupCheck">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="64,0,64,14">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="24" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="{Binding Glyph}" FontWeight="Bold" Margin="0,2,0,0"
+                                                   Foreground="{DynamicResource ResourceKey=DialogMessageForeground}" />
+                                        <StackPanel Grid.Column="1" Orientation="Vertical">
+                                            <TextBlock Style="{StaticResource WelcomeText}" Margin="0" FontWeight="Bold" TextWrapping="Wrap" Text="{Binding Title}" />
+                                            <TextBlock Style="{StaticResource WelcomeSubText}" Margin="0" TextWrapping="Wrap" Text="{Binding Detail}">
+                                                <TextBlock.Visibility>
+                                                    <Binding Path="HasDetail">
+                                                        <Binding.Converter>
+                                                            <BooleanToVisibilityConverter />
+                                                        </Binding.Converter>
+                                                    </Binding>
+                                                </TextBlock.Visibility>
+                                            </TextBlock>
+                                        </StackPanel>
+                                        <Button Grid.Column="2" Content="{Binding FixLabel}" Style="{StaticResource CairoButtonStyle}" Margin="10,0,0,0"
+                                                VerticalAlignment="Top" Click="btnSetupFix_Click">
+                                            <Button.Visibility>
+                                                <Binding Path="HasFix">
+                                                    <Binding.Converter>
+                                                        <BooleanToVisibilityConverter />
+                                                    </Binding.Converter>
+                                                </Binding>
+                                            </Button.Visibility>
+                                        </Button>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
     </Grid>
 </Window>

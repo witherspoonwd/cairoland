@@ -4,6 +4,7 @@ using CairoDesktop.Application.Structs;
 using CairoDesktop.Common;
 using CairoDesktop.Common.Localization;
 using CairoDesktop.Interop;
+using CairoDesktop.Tiling;
 using System;
 using System.Collections.Generic;
 
@@ -21,14 +22,16 @@ namespace CairoDesktop.MenuBar.Launcher
         private readonly LaunchHistory _history;
         private readonly IAppGrabber _appGrabber;
         private readonly Settings _settings;
+        private readonly ITilingManager _tilingManager;
         private ProgramLauncherWindow _window;
 
-        public ToggleProgramLauncherCommand(ProgramIndex index, LaunchHistory history, IAppGrabber appGrabber, Settings settings)
+        public ToggleProgramLauncherCommand(ProgramIndex index, LaunchHistory history, IAppGrabber appGrabber, Settings settings, ITilingManager tilingManager)
         {
             _index = index;
             _history = history;
             _appGrabber = appGrabber;
             _settings = settings;
+            _tilingManager = tilingManager;
 
             // build the index in the background so the first open is instant
             _index.Start();
@@ -42,7 +45,7 @@ namespace CairoDesktop.MenuBar.Launcher
                 return true;
             }
 
-            _window = new ProgramLauncherWindow(_index, _history, _appGrabber, _settings);
+            _window = new ProgramLauncherWindow(_index, _history, _appGrabber, _settings, _tilingManager);
             _window.Closed += (sender, e) => _window = null;
             _window.ShowOn(GetFocusedWorkArea());
             return true;

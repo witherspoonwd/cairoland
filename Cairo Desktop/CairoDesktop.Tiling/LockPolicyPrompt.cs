@@ -8,22 +8,7 @@ namespace CairoDesktop.Tiling
     /// </summary>
     public static class LockPolicyPrompt
     {
-        private static bool _shownThisSession;
         private static bool _isOpen;
-
-        /// <summary>
-        /// Shows the prompt once per Cairo session, and only while the lock policy is unwritable.
-        /// </summary>
-        public static void ShowIfNeeded(WorkstationLockManager lockManager)
-        {
-            if (_shownThisSession || !lockManager.IsUnavailable)
-            {
-                return;
-            }
-
-            _shownThisSession = true;
-            Show(lockManager);
-        }
 
         public static void Show(WorkstationLockManager lockManager)
         {

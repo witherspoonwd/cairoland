@@ -16,47 +16,71 @@ namespace CairoDesktop
         /// <summary>Pass /uiaccess=false to run without UI access.</summary>
         private const string DisableArgument = "/uiaccess=false";
 
+        /// <summary>True when this process is the UI access copy.</summary>
+        public static bool IsCopy
+        {
+            get
+            {
+                try
+                {
+                    return Path.GetFileName(GetExePath()).Equals(UIAccess.ExeName, StringComparison.OrdinalIgnoreCase);
+                }
+                catch (Exception)
+                {
+                    return UIAccess.IsActive;
+                }
+            }
+        }
+
         /// <summary>
-        /// Returns true when the UI access copy was started, and this process should exit.
+        /// Returns the UI access copy's process when it was started, and this process should exit (or, under Shell
+        /// Launcher, wait for it); otherwise null.
         /// </summary>
-        public static bool TryHandOff(string[] args)
+        public static Process TryHandOff(string[] args)
         {
             if (UIAccess.IsActive || args.Any(arg => arg.Equals(DisableArgument, StringComparison.OrdinalIgnoreCase)))
             {
-                return false;
+                return null;
             }
 
             try
             {
-                string exe = Process.GetCurrentProcess().MainModule.FileName;
+                string exe = GetExePath();
                 if (Path.GetFileName(exe).Equals(UIAccess.ExeName, StringComparison.OrdinalIgnoreCase))
                 {
                     // we are the copy
-                    return false;
+                    return null;
                 }
 
                 string copy = Path.Combine(Path.GetDirectoryName(exe), UIAccess.ExeName);
                 if (!File.Exists(copy))
                 {
-                    return false;
+                    return null;
                 }
 
                 // CreateProcess refuses uiAccess exes (ERROR_ELEVATION_REQUIRED); ShellExecute goes through the
                 // AppInfo service, which checks the signature and location and grants UI access
-                Process.Start(new ProcessStartInfo
+                return Process.Start(new ProcessStartInfo
                 {
                     FileName = copy,
                     Arguments = GetArguments(),
                     WorkingDirectory = Environment.CurrentDirectory,
                     UseShellExecute = true
                 });
-                return true;
             }
             catch (Exception ex)
             {
                 // e.g. the signing certificate isn't trusted on this computer
                 Trace.WriteLine($"UIAccessLauncher: Unable to start {UIAccess.ExeName}: {ex.Message}");
-                return false;
+                return null;
+            }
+        }
+
+        private static string GetExePath()
+        {
+            using (Process current = Process.GetCurrentProcess())
+            {
+                return current.MainModule.FileName;
             }
         }
 

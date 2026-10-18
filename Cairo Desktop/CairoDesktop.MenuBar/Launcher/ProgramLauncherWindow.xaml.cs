@@ -39,15 +39,18 @@ namespace CairoDesktop.MenuBar.Launcher
         private readonly LaunchHistory _history;
         private readonly IAppGrabber _appGrabber;
         private readonly Settings _settings;
+        private readonly ITilingManager _tilingManager;
         private User32.RECT _workArea;
         private bool _isClosing;
+        private IDisposable _focusFollowsMouseSuspension;
 
-        public ProgramLauncherWindow(ProgramIndex index, LaunchHistory history, IAppGrabber appGrabber, Settings settings)
+        public ProgramLauncherWindow(ProgramIndex index, LaunchHistory history, IAppGrabber appGrabber, Settings settings, ITilingManager tilingManager)
         {
             _index = index;
             _history = history;
             _appGrabber = appGrabber;
             _settings = settings;
+            _tilingManager = tilingManager;
 
             InitializeComponent();
 
@@ -62,6 +65,10 @@ namespace CairoDesktop.MenuBar.Launcher
         {
             _workArea = workArea;
             _index.RefreshIfStale();
+
+            // the launcher closes when deactivated, and it resizes as results change, which can leave the cursor
+            // over another window that focus follows mouse would then activate
+            _focusFollowsMouseSuspension = _tilingManager.SuspendFocusFollowsMouse();
 
             Show();
             Reposition();
@@ -214,6 +221,15 @@ namespace CairoDesktop.MenuBar.Launcher
             _isClosing = true;
             _index.Updated -= Index_Updated;
             Close();
+        }
+
+        protected override void OnClosed(EventArgs e)
+        {
+            // also reached by Alt+F4 and other closes that skip CloseLauncher
+            _index.Updated -= Index_Updated;
+            _focusFollowsMouseSuspension?.Dispose();
+            _focusFollowsMouseSuspension = null;
+            base.OnClosed(e);
         }
     }
 }

@@ -15,9 +15,21 @@ namespace CairoDesktop.Tiling
     /// </summary>
     public sealed class HiddenWindowJournal : IDisposable
     {
+        /// <summary>A window moved off screen instead of hidden (<see cref="HideMode.Offscreen"/>), and where it was.</summary>
+        public class ParkedWindow
+        {
+            public long Hwnd { get; set; }
+            public int X { get; set; }
+            public int Y { get; set; }
+            public int W { get; set; }
+            public int H { get; set; }
+        }
+
         public class JournalState
         {
             public List<long> Hidden { get; set; } = new List<long>();
+
+            public List<ParkedWindow> Parked { get; set; } = new List<ParkedWindow>();
 
             /// <summary>True when <see cref="LockPolicyExisted"/> and <see cref="LockPolicyValue"/> hold the original policy.</summary>
             public bool LockPolicySaved { get; set; }
@@ -92,6 +104,44 @@ namespace CairoDesktop.Tiling
             }
         }
 
+        public void AddParked(IntPtr hwnd, User32.RECT rect)
+        {
+            lock (_lock)
+            {
+                long id = hwnd.ToInt64();
+                _state.Parked.RemoveAll(parked => parked.Hwnd == id);
+                _state.Parked.Add(new ParkedWindow { Hwnd = id, X = rect.Left, Y = rect.Top, W = rect.Width, H = rect.Height });
+                // saved straight away: a crash now would otherwise leave the window off screen
+                Save();
+            }
+        }
+
+        /// <summary>Forgets a parked window and returns where it was, or null if it isn't parked.</summary>
+        public ParkedWindow RemoveParked(IntPtr hwnd)
+        {
+            lock (_lock)
+            {
+                long id = hwnd.ToInt64();
+                ParkedWindow parked = _state.Parked.Find(item => item.Hwnd == id);
+                if (parked != null)
+                {
+                    _state.Parked.Remove(parked);
+                    ScheduleSave();
+                }
+
+                return parked;
+            }
+        }
+
+        public bool IsParked(IntPtr hwnd)
+        {
+            lock (_lock)
+            {
+                long id = hwnd.ToInt64();
+                return _state.Parked.Exists(item => item.Hwnd == id);
+            }
+        }
+
         public void SaveLockPolicy(bool existed, int value)
         {
             lock (_lock)
@@ -151,8 +201,8 @@ namespace CairoDesktop.Tiling
         }
 
         /// <summary>
-        /// Shows every journaled window that still exists, restores the lock policy and window animations, and
-        /// clears the journal.
+        /// Shows every journaled window that still exists, moves parked windows back, restores the lock policy and
+        /// window animations, and clears the journal.
         /// </summary>
         public void RestoreAll()
         {
@@ -169,6 +219,18 @@ namespace CairoDesktop.Tiling
                 }
 
                 _state.Hidden.Clear();
+
+                foreach (ParkedWindow parked in _state.Parked)
+                {
+                    IntPtr hwnd = new IntPtr(parked.Hwnd);
+                    if (User32.IsWindow(hwnd))
+                    {
+                        ShellLogger.Debug($"HiddenWindowJournal: Moving parked window 0x{parked.Hwnd:X} back");
+                        User32.SetWindowPos(hwnd, IntPtr.Zero, parked.X, parked.Y, parked.W, parked.H, User32.SWP_NOZORDER | User32.SWP_NOACTIVATE | User32.SWP_NOOWNERZORDER);
+                    }
+                }
+
+                _state.Parked.Clear();
 
                 if (_state.LockPolicySaved)
                 {

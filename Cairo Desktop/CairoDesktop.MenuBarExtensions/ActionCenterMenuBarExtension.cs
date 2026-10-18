@@ -17,7 +17,7 @@ namespace CairoDesktop.MenuBarExtensions
 
         public override UserControl StartControl(IMenuBar host)
         {
-            if (_settings.EnableMenuExtraActionCenter && EnvironmentHelper.IsWindows10OrBetter && !EnvironmentHelper.IsAppRunningAsShell)
+            if (_settings.EnableMenuExtraActionCenter && EnvironmentHelper.IsWindows10OrBetter && ShellHost.HasImmersiveShell)
             {
                 return new ActionCenter(host);
             }

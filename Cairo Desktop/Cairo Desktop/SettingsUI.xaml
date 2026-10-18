@@ -381,6 +381,70 @@
                                   d:DisplayMemberPath=""
                                   d:SelectedValuePath="" />
                     </Grid>
+                    <Grid Name="grdDesktopBackground">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_General_Background)}"
+                                   ToolTip="{Binding Path=(l10n:DisplayString.sSettings_General_BackgroundTooltip)}"
+                                   Grid.Column="0"
+                                   MaxWidth="220"
+                                   Margin="5,4,16,4"
+                                   d:Text="Desktop background:" />
+                        <TextBox Name="txtDesktopBackground"
+                                 Grid.Column="1"
+                                 IsReadOnly="True"
+                                 VerticalContentAlignment="Center"
+                                 ToolTip="{Binding Path=DesktopBackgroundPath}"
+                                 d:Text="Windows wallpaper" />
+                        <Button Height="24"
+                                Padding="10,0"
+                                Margin="5,0,0,0"
+                                Name="btnBrowseDesktopBackground"
+                                Click="btnBrowseDesktopBackground_Click"
+                                Content="{Binding Path=(l10n:DisplayString.sSettings_General_BackgroundBrowse)}"
+                                Grid.Column="2"
+                                d:Content="Browse..." />
+                        <Button Height="24"
+                                Padding="10,0"
+                                Margin="5,0,0,0"
+                                Name="btnResetDesktopBackground"
+                                Click="btnResetDesktopBackground_Click"
+                                Content="{Binding Path=(l10n:DisplayString.sSettings_General_BackgroundReset)}"
+                                Grid.Column="3"
+                                d:Content="Use Windows wallpaper" />
+                    </Grid>
+                    <Grid Name="grdDesktopBackgroundStyle">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{Binding Path=(l10n:DisplayString.sSettings_General_BackgroundStyle)}"
+                                   Grid.Column="0"
+                                   MaxWidth="220"
+                                   Margin="5,4,16,4"
+                                   d:Text="Background fit:" />
+                        <ComboBox Name="cboDesktopBackgroundStyle"
+                                  IsDropDownOpen="False"
+                                  IsEditable="False"
+                                  SelectedValuePath="Tag"
+                                  SelectedValue="{Binding Path=DesktopBackgroundStyle, UpdateSourceTrigger=PropertyChanged}"
+                                  Grid.Column="1">
+                            <ComboBoxItem Tag="Fill"
+                                          Content="{Binding Path=(l10n:DisplayString.sSettings_General_BackgroundFill)}" />
+                            <ComboBoxItem Tag="Fit"
+                                          Content="{Binding Path=(l10n:DisplayString.sSettings_General_BackgroundFit)}" />
+                            <ComboBoxItem Tag="Stretch"
+                                          Content="{Binding Path=(l10n:DisplayString.sSettings_General_BackgroundStretch)}" />
+                            <ComboBoxItem Tag="Center"
+                                          Content="{Binding Path=(l10n:DisplayString.sSettings_General_BackgroundCenter)}" />
+                            <ComboBoxItem Tag="Tile"
+                                          Content="{Binding Path=(l10n:DisplayString.sSettings_General_BackgroundTile)}" />
+                        </ComboBox>
+                    </Grid>
                 </StackPanel>
             </TabItem>
             <TabItem Header="{Binding Path=(l10n:DisplayString.sSettings_MenuBar)}"
@@ -1074,48 +1138,20 @@
                                Style="{StaticResource SettingGroupHeader}"
                                d:Text="Shell" />
                     <StackPanel Orientation="Vertical">
-                        <TextBlock d:Text="Windows Explorer is currently your shell.">
-                            <TextBlock.Style>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="Foreground"
-                                            Value="#ffe9ecf4" />
-                                    <Setter Property="Margin"
-                                            Value="5,4" />
-                                    <Setter Property="VerticalAlignment"
-                                            Value="Center" />
-                                    <Setter Property="Text"
-                                            Value="{Binding Path=(l10n:DisplayString.sSettings_Advanced_ExplorerIsShell)}" />
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding Path=(helpers:EnvironmentHelper.IsAppConfiguredAsShell)}"
-                                                     Value="True">
-                                            <Setter Property="Text"
-                                                    Value="{Binding Path=(l10n:DisplayString.sSettings_Advanced_CairoIsShell)}" />
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
+                        <TextBlock Name="txtShellStatus"
+                                   Foreground="#ffe9ecf4"
+                                   Margin="5,4"
+                                   VerticalAlignment="Center"
+                                   TextWrapping="Wrap"
+                                   d:Text="Windows Explorer is currently your shell." />
                         <Button Height="24"
                                 Padding="10,0"
                                 Margin="5,4"
                                 HorizontalAlignment="Left"
                                 Name="btnChangeShell"
                                 Click="btnChangeShell_Click"
-                                d:Content="Set Cairo as shell">
-                            <Button.Style>
-                                <Style TargetType="Button">
-                                    <Setter Property="Content"
-                                            Value="{Binding Path=(l10n:DisplayString.sSettings_Advanced_SetCairoAsShell)}" />
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding Path=(helpers:EnvironmentHelper.IsAppConfiguredAsShell)}"
-                                                     Value="True">
-                                            <Setter Property="Content"
-                                                    Value="{Binding Path=(l10n:DisplayString.sSettings_Advanced_SetExplorerAsShell)}" />
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                        </Button>
+                                Content="{Binding Path=(l10n:DisplayString.sSettings_Advanced_ShellSetup)}"
+                                d:Content="Shell setup..." />
                     </StackPanel>
                 </StackPanel>
             </TabItem>

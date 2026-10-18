@@ -77,6 +77,14 @@ namespace CairoDesktop.Tiling
                 return FilterResult.Ignore;
             }
 
+            // a UWP frame with neither an app attached nor a title is a leftover from a closed app
+            bool isFrame = UwpWindowHelper.IsFrame(className);
+            uint appPid = isFrame ? UwpWindowHelper.GetAppPid(hwnd) : pid;
+            if (isFrame && appPid == 0 && User32.GetWindowTextLength(hwnd) == 0)
+            {
+                return FilterResult.Ignore;
+            }
+
             bool hasCaption = (style & User32.WS_CAPTION) == User32.WS_CAPTION;
             if (!hasCaption && User32.GetWindowTextLength(hwnd) == 0)
             {
@@ -112,8 +120,14 @@ namespace CairoDesktop.Tiling
 
             if (_settings.TilingFloatExes != null && _settings.TilingFloatExes.Length > 0)
             {
-                string exe = ManagedWindow.GetExeName(pid);
+                // for UWP frames, the hosted app (Calculator.exe, or its AppUserModelID), not ApplicationFrameHost.exe
+                string exe = appPid != 0 ? ManagedWindow.GetExeName(appPid) : ManagedWindow.GetExeName(pid);
                 if (Matches(_settings.TilingFloatExes, exe) || Matches(_settings.TilingFloatExes, System.IO.Path.GetFileNameWithoutExtension(exe)))
+                {
+                    return FilterResult.Float;
+                }
+
+                if (isFrame && Matches(_settings.TilingFloatExes, UwpWindowHelper.GetAppUserModelId(hwnd, appPid)))
                 {
                     return FilterResult.Float;
                 }

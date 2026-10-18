@@ -23,6 +23,7 @@ namespace CairoDesktop.Common
         private const int LLKHF_INJECTED = 0x10;
         private const int VK_LWIN = 0x5B;
         private const int VK_RWIN = 0x5C;
+        private const int VK_ESCAPE = 0x1B;
         private const ushort VK_MASK = 0xE8; // unassigned; used the same way AutoHotkey masks the Win key
 
         [StructLayout(LayoutKind.Sequential)]
@@ -64,6 +65,12 @@ namespace CairoDesktop.Common
 
         public bool IsHooked => _hookID != IntPtr.Zero;
 
+        /// <summary>
+        /// When set, a lone Win press (and Ctrl+Esc) doesn't reach the shell, so the Start menu never opens. Used
+        /// under Shell Launcher, where Start opens but can't be used.
+        /// </summary>
+        public bool MaskLoneWin { get; set; }
+
         public LowLevelKeyboardListener()
         {
             _proc = HookCallback;
@@ -100,8 +107,29 @@ namespace CairoDesktop.Common
             }
         }
 
+        private static readonly int[] ModifierKeys = { VK_LWIN, VK_RWIN, 0xA0, 0xA1, 0x10, 0xA2, 0xA3, 0x11, 0xA4, 0xA5, 0x12 };
+
+        /// <summary>
+        /// Drops modifiers we think are down but aren't. The hook misses key ups when its callback times out (the UI
+        /// thread was busy, say opening the launcher right after Win+Space), and a stale Win turns every letter typed
+        /// afterwards into a Win+letter hotkey.
+        /// </summary>
+        private void DropReleasedModifiers()
+        {
+            foreach (int vk in ModifierKeys)
+            {
+                if (_keysDown.Contains(vk) && User32.GetAsyncKeyState(vk) >= 0)
+                {
+                    _keysDown.Remove(vk);
+                    keysPressed.Remove(vk);
+                }
+            }
+        }
+
         private HotKeyModifier CurrentModifiers()
         {
+            DropReleasedModifiers();
+
             HotKeyModifier modifiers = HotKeyModifier.None;
             if (_keysDown.Contains(VK_LWIN) || _keysDown.Contains(VK_RWIN)) modifiers |= HotKeyModifier.Win;
             if (_keysDown.Contains(0xA0) || _keysDown.Contains(0xA1) || _keysDown.Contains(0x10)) modifiers |= HotKeyModifier.Shift;
@@ -141,6 +169,13 @@ namespace CairoDesktop.Common
                         return new IntPtr(1);
                     }
 
+                    if (MaskLoneWin && vkCode == VK_ESCAPE && modifiers == HotKeyModifier.Ctrl)
+                    {
+                        // Ctrl+Esc opens Start too
+                        _swallowed.Add(vkCode);
+                        return new IntPtr(1);
+                    }
+
                     var kpa = new KeyEventArgs(KeyInterop.KeyFromVirtualKey(vkCode), modifiers);
                     OnKeyDown?.Invoke(this, kpa);
                     if (kpa.Handled)
@@ -169,6 +204,11 @@ namespace CairoDesktop.Common
                     if ((vkCode == VK_LWIN || vkCode == VK_RWIN) && _maskWinUp)
                     {
                         _maskWinUp = false;
+                        SendMaskKey();
+                    }
+                    else if ((vkCode == VK_LWIN || vkCode == VK_RWIN) && MaskLoneWin && keysPressed.Count == 1)
+                    {
+                        // nothing else was pressed since Win went down, so this would open Start
                         SendMaskKey();
                     }
 

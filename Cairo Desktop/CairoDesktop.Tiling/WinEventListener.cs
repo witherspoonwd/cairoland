@@ -2,6 +2,7 @@ using CairoDesktop.Interop;
 using ManagedShell.Common.Logging;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 
 namespace CairoDesktop.Tiling
 {
@@ -53,6 +54,7 @@ namespace CairoDesktop.Tiling
         // kept in a field so the delegate is not garbage collected while hooked
         private readonly User32.WinEventDelegate _callback;
         private readonly List<IntPtr> _hooks = new List<IntPtr>();
+        private readonly HashSet<IntPtr> _ownHooks = new HashSet<IntPtr>();
 
         public event EventHandler<WinEventArgs> WindowEvent;
 
@@ -70,18 +72,35 @@ namespace CairoDesktop.Tiling
                 return;
             }
 
+            uint ownPid;
+            using (Process process = Process.GetCurrentProcess())
+            {
+                ownPid = (uint)process.Id;
+            }
+
             foreach (var range in Ranges)
             {
-                IntPtr hook = User32.SetWinEventHook(range.Min, range.Max, IntPtr.Zero, _callback, 0, 0,
-                    User32.WINEVENT_OUTOFCONTEXT | User32.WINEVENT_SKIPOWNPROCESS);
+                Hook(range, 0, User32.WINEVENT_OUTOFCONTEXT | User32.WINEVENT_SKIPOWNPROCESS, own: false);
 
-                if (hook == IntPtr.Zero)
-                {
-                    ShellLogger.Warning($"WinEventListener: Unable to hook events 0x{range.Min:X}-0x{range.Max:X}");
-                    continue;
-                }
+                // Cairo's own windows only reach the manager if they opted in with TilingWindow.IsManaged
+                Hook(range, ownPid, User32.WINEVENT_OUTOFCONTEXT, own: true);
+            }
+        }
 
-                _hooks.Add(hook);
+        private void Hook((uint Min, uint Max) range, uint processId, uint flags, bool own)
+        {
+            IntPtr hook = User32.SetWinEventHook(range.Min, range.Max, IntPtr.Zero, _callback, processId, 0, flags);
+
+            if (hook == IntPtr.Zero)
+            {
+                ShellLogger.Warning($"WinEventListener: Unable to hook events 0x{range.Min:X}-0x{range.Max:X}");
+                return;
+            }
+
+            _hooks.Add(hook);
+            if (own)
+            {
+                _ownHooks.Add(hook);
             }
         }
 
@@ -93,6 +112,7 @@ namespace CairoDesktop.Tiling
             }
 
             _hooks.Clear();
+            _ownHooks.Clear();
         }
 
         private void OnWinEvent(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime)
@@ -122,6 +142,12 @@ namespace CairoDesktop.Tiling
 
             // a destroyed window can no longer be queried, so let the manager decide whether it knew it
             if (kind != WinEventKind.Destroyed && User32.GetAncestor(hwnd, User32.GA_ROOT) != hwnd)
+            {
+                return;
+            }
+
+            // a destroyed window's HwndSource may already be gone; the manager ignores windows it never knew
+            if (kind != WinEventKind.Destroyed && _ownHooks.Contains(hWinEventHook) && !TilingWindow.IsOwnWindowManaged(hwnd))
             {
                 return;
             }

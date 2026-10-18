@@ -386,14 +386,21 @@ namespace CairoDesktop.AppGrabber
             }
             else
             {
-                // Store apps that are FullTrust can be activated, which works even without Explorer
-                // Non-FullTrust apps will not launch without Explorer and will hang us, so don't use activation for them
-                if (app.IsStoreApp && app.AllowRunAsAdmin)
+                // Store apps that are FullTrust can be activated, which works even without Explorer.
+                // Other Store apps need the immersive shell (Explorer, or Shell Launcher's CustomShellHost); without
+                // it activation hangs. Activation runs off the UI thread so a slow app can't freeze Cairo.
+                if (app.IsStoreApp && (app.AllowRunAsAdmin || ShellHost.HasImmersiveShell))
                 {
-                    if (!ShellHelper.ActivateApplication(app.Target))
+                    string target = app.Target;
+                    System.Windows.Threading.Dispatcher dispatcher = System.Windows.Application.Current?.Dispatcher;
+                    System.Threading.Tasks.Task.Run(() =>
                     {
-                        CairoMessage.Show(DisplayString.sError_FileNotFoundInfo, DisplayString.sError_OhNo, MessageBoxButton.OK, CairoMessageImage.Error);
-                    }
+                        if (!ShellHelper.ActivateApplication(target))
+                        {
+                            dispatcher?.BeginInvoke(new Action(() =>
+                                CairoMessage.Show(DisplayString.sError_FileNotFoundInfo, DisplayString.sError_OhNo, MessageBoxButton.OK, CairoMessageImage.Error)));
+                        }
+                    });
                 }
                 else if (!ShellHelper.StartProcess(app.Path, workingDirectory: getAppParentDirectory(app)))
                 {

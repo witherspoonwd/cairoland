@@ -1,596 +1,285 @@
-# Cairoland: Turn Cairo shell-replacement mode into a tiling window manager
+# Plan: Shell Launcher v2 as Cairo's shell, then tiling UWP apps
 
 ## Context
 
-Cairo Desktop (C#/WPF, `Cairo Desktop/` in this repo) is a Windows shell replacement: a menu bar, a taskbar, a desktop, and a tray. We want a lean shell that is also an **awesomewm-style tiling window manager**:
+Today Cairo becomes the shell by stopping Explorer (`Start-CairoShell.ps1`), or by writing the Winlogon `Shell` value from the Settings button. Either way, nothing hosts UWP windows, because that support lives inside Explorer. As a result:
+- UWP apps (Calculator, Settings, Store) don't start.
+- Cairo hides the Settings and Action Center commands in shell mode.
 
-- **Keys:** HJKL for directions (Win+L is taken over from Windows; locking moves to Win+P).
-- **Tags:** 10 per monitor. Win+N views tag N (Win+0 is tag 10). Win+Shift+N moves the focused window to tag N.
-- **Tiling:** windows on a tag are tiled as a **binary space partition (BSP) tree** and can be rearranged and resized from the keyboard.
-- **Top bar layout:** `[Cairo menu][tag bar][window list for the current tag, focused window highlighted][tray/volume/clock/search]`.
-- **Focus follows mouse.**
-- **Removed:** the desktop (icons, overlay, dynamic desktop), Stacks, the Places menu, the Programs menu, the Taskbar project, and Cairo Explorer.
-- **Program launcher:** a new keyboard-driven fuzzy launcher that searches **installed programs only** (Start Menu and Store apps).
-- **Kept:** the Cairo (top-left) menu, which also gets the new window-manager settings, and the Search menu extra.
+The machine is now Windows 10 **Enterprise** 22H2 (19045). That edition has **Shell Launcher v2**, which replaces Explorer with `CustomShellHost.exe`. Microsoft's docs say: *"You can use a custom Windows desktop application that can then launch UWP apps, such as Settings."*
 
-Decisions already made with the user:
+Goal:
+1. Make Shell Launcher v2 the only way Cairo runs as the shell.
+2. Then make the tiler manage UWP windows properly.
 
-| Topic | Decision |
-|---|---|
-| Keybindings | Awesome-style: Win+N views, Win+Shift+N moves |
-| Hiding windows on other tags | `ShowWindow(SW_HIDE)`, plus a journal that restores every window on exit, crash, or startup |
-| Programs menu, Taskbar | Removed. Search extra stays |
-| When tiling runs | Automatically when Cairo is the shell. Setting `EnableTilingOutsideShell` forces it on under Explorer for development |
+The old ways of becoming the shell go away. When you tap Win on its own, nothing happens (Start doesn't open).
 
-## Architecture overview
+### Facts this plan relies on
 
-```
-Cairo Desktop.sln
-├─ CairoDesktop.Tiling.Core   NEW  netstandard2.0;net10.0, no WPF/Win32. BSP tree, tags, geometry, fuzzy matcher
-├─ CairoDesktop.Tiling        NEW  net480;net6.0-windows;net10.0-windows (WPF). Win32 window tracking, arranging,
-│                                  hotkeys, focus-follows-mouse, per-screen view models
-├─ CairoDesktop.Interop       EXTEND  User32.cs, Dwmapi.cs P/Invokes
-├─ CairoDesktop.MenuBar       MODIFY  TagBar + WindowList controls, launcher window, Programs/Places/Stacks removed
-├─ Tests/CairoDesktop.Tiling.Core.Tests   NEW  xunit, net10.0. Runs on Linux with `dotnet test`
-└─ removed: CairoDesktop.DynamicDesktop, CairoDesktop.Taskbar, Cairo Explorer
-```
+**Microsoft documentation:**
+- Enable the feature with `Enable-WindowsOptionalFeature -Online -FeatureName Client-DeviceLockdown,Client-EmbeddedShellLauncher` (needs admin).
+- Configure it locally by writing XML to the `ShellLauncher` property of `MDM_AssignedAccess` in `root\cimv2\mdm\dmmap`. That WMI class only works when run as **SYSTEM**.
+  - Write the XML HTML-encoded: `[System.Net.WebUtility]::HtmlEncode(...)`.
+  - Errors are logged to `Microsoft-Windows-AssignedAccess/Admin`.
+  - The docs' removal snippet clears `.Configuration`. That's the kiosk property. For Shell Launcher, clear `.ShellLauncher` instead.
+- XML structure:
+  - Namespaces: `http://schemas.microsoft.com/ShellLauncher/2018/Configuration`, plus `V2` = `.../2019/Configuration`.
+  - A `Shell` element takes the attributes `Shell`, `V2:AppType="Desktop"` and `V2:AllAppsFullScreen="false"`, plus up to four `ReturnCodeAction` entries and one `DefaultAction`. Actions: `RestartShell` | `RestartDevice` | `ShutdownDevice` | `DoNothing`.
+  - `DefaultProfile` applies to accounts without a `Config`. A local account can be named `.\user`, and it must already exist.
+- The `Shell` attribute takes a full path and can include arguments.
+- Shell Launcher runs the `Run` and `RunOnce` registry keys itself before starting the shell.
+- Changes take effect at the next sign-in.
+- A shell that starts another process and then exits isn't supported: Shell Launcher only watches the process it started.
 
-`Tiling.Core` is kept free of Windows dependencies on purpose. The dev machine is Linux, so the layout, tag, and fuzzy logic can be unit-tested there. Everything else needs Windows to build and run; with `EnableWindowsTargeting=true` it may still compile on Linux.
+**Community reports** (one bbLean user, Win10 Enterprise; unverified, so step 0 checks them):
+- UWP apps, the Store, Alt+Tab, Win+Tab and virtual desktops work.
+- Win or Ctrl+Esc opens a Start menu that can't be clicked.
+- Toast notifications don't work.
+- CustomShellHost "takes over the tray".
+- Non-Microsoft-signed exes may not start.
 
-**Naming:** `CairoDesktop.Infrastructure/Services/WindowManager.cs` / `IWindowManager` already exist and handle *screens and appbar windows*. Do not reuse that name. The new subsystem is called **Tiling** (`ITilingManager`, `TilingManager`).
-
----
-
-## Phase 1: Removal and cleanup
-
-Goal: the app builds and runs as a shell showing only the menu bar (Cairo menu, extras) and wallpaper. Commit after each sub-step.
-
-### 1a. Keep the shell-window behaviour that DesktopManager provides, then delete DynamicDesktop
-
-`CairoDesktop.DynamicDesktop/Services/DesktopManager.cs` does two things we still need in shell mode:
-
-1. **Shell window registration.** `CreateShellWindow()` / `DestroyShellWindow()` (lines ~320–346) create `ManagedShell.Common.SupportingClasses.ShellWindow` (SetShellWindow, plus `WallpaperChanged`/`WorkAreaChanged` events).
-2. **Wallpaper.** The `Desktop` window paints it (`Desktop.xaml.cs setBackground()`).
-
-Steps:
-
-- Create `CairoDesktop.Infrastructure/Services/ShellWindowService.cs` (or put it in the main app under `Cairo Desktop/Services/`).
-  - `Initialize()`: if `EnvironmentHelper.IsAppRunningAsShell`, create the `ShellWindow` and subscribe to its events. Copy the logic from DesktopManager.
-  - Owns a new `WallpaperWindow`: one borderless WPF window per screen, bottom-most, `WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE`, and a child of the ShellWindow using the same SetParent pattern as `DesktopManager.ConfigureDesktop`.
-  - The window shows the system wallpaper, read from `HKCU\Control Panel\Desktop\Wallpaper`, with WallpaperStyle mapped to WPF `Stretch`. It falls back to a solid colour.
-  - Reloads on `ShellWindow.WallpaperChanged` and `IWindowManager.ScreensChanged`.
-  - Only exists in shell mode.
-- Replace the call in `Cairo Desktop/CairoApplicationInitializationService.InitializationRoutines.cs:100` (`IDesktopManager.Initialize()`) with `ShellWindowService.Initialize()`. Dispose it on exit.
-- Delete the `CairoDesktop.DynamicDesktop/` project:
-  - its entry in `Cairo Desktop.sln` (project line ~39, configs ~183–194, nesting ~212)
-  - the ProjectReference in `Cairo Desktop/Cairo Desktop.csproj:88`
-  - in `Program.cs`: lines 17–18 (usings), 75 (`IDesktopManager`), 112 (`ToggleDesktopOverlayCommand`)
-- Delete `CairoDesktop.Infrastructure/ObjectModel/IDesktopManager.cs` and fix its consumers:
-  - `Cairo Desktop/Commands/OpenLocationCommand.cs`: always open in a window. Simplest is to make it delegate to the `OpenLocationInWindow` behaviour.
-  - `OpenLocationInWindowCommand.cs`: drop the `IsOverlayOpen = false`.
-  - `OpenControlPanelCommand.cs:26`: remove the `FoldersOpenDesktopOverlay` usage.
-- `Cairo Desktop/Services/ShellHotKeyService.cs`:
-  - Remove Win+D and Win+Comma.
-  - Win+E invokes `OpenLocationInWindow`.
-  - Win+R is reassigned in Phase 6.
-- `CairoDesktop.Common/Settings.cs`: delete `#region Desktop` (lines ~133–224) and `FoldersOpenDesktopOverlay`.
-- Delete Common classes used only by the desktop or Stacks: `NavigationManager.cs`, `NavigationItem.cs`, `FolderView.cs`, `Icon.xaml(.cs)`, `DragDropHandler.cs`, `CairoWallpaperStyle.cs`. Check each with grep before deleting.
-- `Cairo Desktop/SettingsUI.xaml(.cs)`: remove
-  - the Desktop tab (XAML ~513–694)
-  - "Files and folders" / `chkFoldersOpenDesktopOverlay` (~314–319)
-  - in code-behind: `loadDesktopBackgroundSettings`, `#region Desktop Background`, the DesktopLabelPosition/IconSize radios, the DesktopOverlayHotKey combo, `btnDesktopHomeSelect_Click`, the SETDESKWALLPAPER WndProc reload
-  - the `"desktop"` case in `Services/SettingsUIService.cs`. Have `OpenPersonalizeControlPanelCommand` open the Windows personalization control panel instead.
-- `Cairo Desktop/Welcome.xaml(.cs)`: remove the desktop page (`bdrDesktop`, ~68–87) and the Places/Stacks sections (~52–57), and re-link the page flow (`Welcome.xaml.cs` ~94/99).
-- Themes (`Cairo Desktop/Themes/*.xaml`): remove Desktop*/DesktopNavToolbar*/DesktopOverlay*/`CairoDesktopButtonStyle`/`DesktopFolderViewStyle`/`DesktopNavToolbar`/`CairoDesktopNavItemStyle`. Remove the matching resources from `Cairo Desktop.csproj` (`desktopOverlayIcon.png`, `controls*.png`, `Welcome\desktop.jpg`).
-- Localization (`CairoDesktop.Common/Localization/DisplayString.cs` + `Language.cs`): remove `sDesktop_*`, `sSettings_Desktop*`, `sWelcome_Desktop*`, `sWelcome_DynamicDesktop`, `sCommand_Open/CloseDesktopOverlay`, `sTaskbar_DesktopOverlayToolTip`.
-  - **Keep** `sDesktop_DeleteTitle` (DeleteFileCommand), `sDesktop_DisplaySettings` and `sDesktop_Personalize` (control panel commands), `sStacks_OpenInNewWindow` (OpenLocationInWindow label), and `sSettings_General_FilesAndFolders` (Advanced tab).
-  - Grep before deleting each key.
-
-### 1b. Remove Stacks and the Places menu
-
-- Delete `CairoDesktop.MenuBar/StacksContainer.xaml(.cs)`, `StacksScroller.xaml(.cs)`, `CairoDesktop.Common/StacksManager.cs`, and `Cairo Desktop/Commands/AddStackCommand.cs` / `RemoveStackCommand.cs` (registered in `Program.cs` ~115–116).
-- `CairoDesktop.MenuBar/MenuBar.xaml`: remove `PlacesMenu` and `<control:StacksContainer>`. Phase 5 puts the window list in the fill slot.
-- `CairoDesktop.MenuBar/MenuBar.xaml.cs`: remove `isPlacesMenuInitialized`, `setupPlacesMenu`, `PlacesMenu_Opened`, `stacksContainer.MenuBar = this`, the `EnablePlacesMenu` case, and the `_host` field if nothing else uses it.
-- Remove `Places` from `CairoDesktop.Application/Interfaces/ICairoApplication.cs` and `Cairo Desktop/CairoApplication.xaml.cs`.
-- Settings to remove: `EnablePlacesMenu`, `ShowStacksRemovableDrives`, and their SettingsUI checkboxes (~373–376, ~438–441).
-- Remove Stacks theme styles (`StacksIconText`, `CairoStacksStyle`, `StackScrollButton`, `StackTopButton`, `StackScrollViewer`, `sStacks_Empty` template) and the `sStacks_*` (except `OpenInNewWindow`), `sPlacesMenu`, and `sInterface_Add/RemoveFromStacks` strings.
-
-### 1c. Remove the Programs menu
-
-- Delete `CairoDesktop.MenuBar/ProgramsMenu.xaml(.cs)`, `Converters/ProgramsMenuHeightConverter.cs`, and `Commands/ToggleProgramsMenuCommand.cs` (and its registration).
-- `MenuBar.xaml(.cs)`: remove the `ProgramsMenu` item and the `#region Programs menu`.
-- `CairoDesktop.MenuBar/Services/MenuBarHotKeyService.cs`: remove `programsMenuHotKeys`, `registerWinKey`, and `unregisterWinKey`. Keep the Cairo-menu hotkey.
-- Settings to remove: `EnableProgramsMenu`, `ProgramsMenuLayout`, `DefaultProgramsCategory`, `EnableWinKey`, plus their SettingsUI rows.
-- Remove `OpenAppGrabber` from the Cairo menu list in `MenuBar.xaml.cs CairoMenu_Opened`. Keep the `CairoDesktop.AppGrabber` project: `AppGrabberService.GetApps()` is the launcher's data source in Phase 6.
-
-### 1d. Remove the Taskbar
-
-- Delete `CairoDesktop.Taskbar/`: its sln entries, ProjectReference, and `services.AddSingleton<IWindowService, TaskbarWindowService>()` in `Program.cs`.
-- Delete `CairoDesktop.AppGrabber/AppGrabberTaskCategoryProvider.cs`. Its only user was the Taskbar.
-- Settings to remove: all `Taskbar*` and `EnableTaskbar*` settings, `ShowTaskbar*`, `FullWidthTaskBar`, and the Taskbar tab in SettingsUI (~696–862).
-- Remove `CairoTaskbar*` theme styles and `sTaskbar_*`/`sSettings_Taskbar*` strings, grepping first.
-- `TaskbarWindowService` used to call `ShellManager.Tasks.Initialize(...)`. The tiling engine does **not** depend on ManagedShell's TasksService (Phase 3 explains why), so nothing replaces that call.
-- `TaskViewCommand` was referenced only by the taskbar menu. Delete it.
-
-### 1e. Delete Cairo Explorer
-
-- Delete `Cairo Desktop/Cairo Explorer/` and its sln lines (~15, ~87–92, ~203). Nothing references it.
-
-**Phase 1 check:** `dotnet build "Cairo Desktop/Cairo Desktop.sln"` succeeds for net10.0-windows. A grep for `DynamicDesktop|StacksManager|IDesktopManager|Taskbar|ProgramsMenu|PlacesMenu` returns nothing outside git history.
+**Account:** the only account is local admin `runch` (SID `...-1001`). The built-in Administrator is disabled.
 
 ---
 
-## Phase 2: Interop additions (`CairoDesktop.Interop`)
+## Phase 0: Spike to check how CustomShellHost behaves (decides the open questions below)
 
-ManagedShell is a NuGet package (0.0.358), and its source isn't available locally. Add our own P/Invokes rather than relying on whatever its `NativeMethods` happens to include.
+Install the current build (`Build-Installer.ps1`, then run the installer). Apply a hand-written config with the Phase 1 scripts. Sign out and back in. Then run a new read-only `Get-ShellDiagnostics.ps1` (repo root), which dumps:
+- `GetShellWindow()` and the process that owns it.
+- Every `Shell_TrayWnd`, `Shell_SecondaryTrayWnd`, `Progman` and `WorkerW` window, with its owning process.
+- The `CustomShellHost.exe` process tree, i.e. who is Cairo's parent.
+- Cairo's log lines for: `Running as shell`, hotkey registrations that failed, and the tray service.
+- After launching Calculator and `ms-settings:`:
+  - every `ApplicationFrameWindow` and its child `Windows.UI.Core.CoreWindow`;
+  - their styles, cloak state and process IDs.
 
-- **`CairoDesktop.Interop/User32.cs`:**
-  - `EnumWindows`, `GetWindowRect`, `SetWindowPos`, `BeginDeferWindowPos` / `DeferWindowPos` / `EndDeferWindowPos`
-  - `ShowWindow` / `ShowWindowAsync`, `IsWindow`, `IsWindowVisible`, `IsIconic`, `IsZoomed`
-  - `GetWindowLongPtr` (32/64 shim), `GetWindow` (GW_OWNER), `GetAncestor`, `GetWindowThreadProcessId`
-  - `GetClassName`, `GetWindowText(Length)`
-  - `GetForegroundWindow`, `SetForegroundWindow`, `AllowSetForegroundWindow`
-  - `MonitorFromWindow`, `MonitorFromPoint`, `GetMonitorInfo` (rcWork), `GetCursorPos`, `WindowFromPoint`
-  - `PostMessage` (WM_CLOSE), `SendMessageTimeout` (WM_GETICON), `GetClassLongPtr` (GCLP_HICON/HICONSM)
-  - `SetWinEventHook` / `UnhookWinEvent` and the `WinEventDelegate`
-  - `SystemParametersInfo` overloads for `SPI_GET/SETACTIVEWINDOWTRACKING`, `SPI_GET/SETACTIVEWNDTRKZORDER`, `SPI_GET/SETACTIVEWNDTRKTIMEOUT`
-  - Constants: `EVENT_OBJECT_SHOW/HIDE/DESTROY/NAMECHANGE/LOCATIONCHANGE/CLOAKED/UNCLOAKED`, `EVENT_SYSTEM_FOREGROUND/MOVESIZESTART/MOVESIZEEND/MINIMIZESTART/MINIMIZEEND`, `WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS`, `OBJID_WINDOW`
-  - `keybd_event` or `SendInput`, for the Alt-tap trick that lets `SetForegroundWindow` succeed
-  - `LockWorkStation`, used by the Win+P lock (Phase 4, 10a)
-- **`CairoDesktop.Interop/Dwmapi.cs`:** `DwmGetWindowAttribute` with `DWMWA_EXTENDED_FRAME_BOUNDS` (9) and `DWMWA_CLOAKED` (14).
-- Multi-targeting: the projects target `net480`, so use classic `[DllImport]`, not `LibraryImport`, and C# 7.3-compatible syntax unless the project sets a higher `LangVersion`. Check each csproj.
+Record the answers in `plan.md` under "Spike results". Each one picks a branch:
 
----
-
-## Phase 3: `CairoDesktop.Tiling.Core` (pure logic) and tests
-
-New SDK-style project targeting `netstandard2.0;net10.0` with `LangVersion` latest. It has **no** references to WPF, ManagedShell, or Win32. Window identity is an opaque `long Id`; the runtime uses the hwnd value.
-
-### Geometry
-
-- `RectI` (X, Y, W, H) with `Inset(int)`, `SplitH(ratio, gap)`, `SplitV(ratio, gap)`, `Center`, and `Contains`.
-
-### BSP tree: `BspTree`
-
-- Nodes: `BspNode` is abstract, with `Parent`. `BspLeaf` holds a `WindowId`. `BspSplit` holds `Orientation` (Horizontal = side-by-side, Vertical = stacked), `Ratio` (0.1–0.9, default 0.5), `First`, and `Second`.
-- `Insert(windowId, targetLeafId?, RectI area)`:
-  - No root: the window becomes the root leaf.
-  - Otherwise: split the target leaf, or the most recently focused leaf if none is given. Fall back to the deepest right-most leaf (dwindle-like).
-  - The new split's orientation follows the target leaf's current rect: width ≥ height gives Horizontal, else Vertical.
-  - The new window goes in `Second` (right or bottom).
-- `Remove(windowId)`: the sibling replaces the parent split. Removing the root leaf empties the tree.
-- `Layout(RectI area, int gap) → Dictionary<long, RectI>`: recursive. Apply an outer gap, then split each node with an inner gap.
-- `FindNeighbor(windowId, Direction, layout)`: use the computed rects. Candidates lie strictly in the given direction and overlap the source on the perpendicular axis. Pick the smallest edge distance, then the largest overlap. Direction is Left/Right/Up/Down.
-- `Swap(a, b)`: swap the window ids in two leaves.
-- `Move(windowId, Direction)`: if a neighbour exists, remove the window and re-insert it splitting the neighbour on the side facing the direction. This is "move into", distinct from swap.
-- `Resize(windowId, Direction, delta)`: find the nearest ancestor split whose orientation matches the axis and where the window is on the side that edge belongs to. Adjust `Ratio` by ±delta and clamp.
-- `ToggleOrientation(windowId)`: flip the orientation of the leaf's parent split.
-- `Equalize()`: set every ratio to 0.5.
-- `SetRatioFromRect(windowId, RectI newRect, layout)`: after a mouse resize, compute the new ratio for the relevant ancestor or ancestors.
-- `Leaves()` in in-order traversal, used for next/prev focus cycling.
-
-### Tags: `TagSet` and `Tag`
-
-- `TagSet` is created per monitor with 10 `Tag`s, indices 0–9, displayed as "1"–"9" and "0" (labels configurable later).
-- `Tag`:
-  - `BspTree Tree`
-  - `List<long> Floating`
-  - `List<long> Minimized`, kept out of the tree until restored
-  - `long? FocusedWindow`, the last-focused window, restored on view
-  - `long? FullscreenWindow`
-- `TagSet`:
-  - `int SelectedIndex`, plus `PreviousIndex` for Win+Escape to go back
-  - `Dictionary<long, int> windowToTag`
-  - `AddWindow(id, tagIndex, floating)`, `RemoveWindow(id)`, `MoveWindow(id, toTag)` (append to the target tree next to its last-focused leaf)
-  - `View(index)` returns a `TagViewDelta { ToHide, ToShow }`
-  - `IsOccupied(index)`
-- Single-select view only for v1. Leave a TODO for toggle-view (Win+Ctrl+N), which awesome supports.
-
-### Fuzzy matcher: `FuzzyMatcher` (used by the launcher in Phase 6)
-
-- `int? Score(string query, string candidate)`: fzf-style, case-insensitive subsequence match. Returns `null` when the query is not a subsequence.
-- Bonuses: match at index 0, match at a word boundary (after space, `-`, `_`, `.`, or a camelCase hump), and consecutive-character runs. Penalties: gaps between matches and leading unmatched characters.
-- `IReadOnlyList<int> MatchPositions(query, candidate)`, for bold highlighting in the UI.
-- `Rank<T>(query, items, Func<T, string> primary, Func<T, string?> secondary, Func<T, int> frecency)`:
-  - Score is `max(primaryScore, secondaryScore - 10)`.
-  - Sort by score descending, then frecency descending, then name length ascending.
-  - An empty query sorts by frecency, then alphabetically.
-
-### Tests: `Cairo Desktop/Tests/CairoDesktop.Tiling.Core.Tests`
-
-New SDK xunit project, `net10.0`. Do not reuse the legacy `Cairo Desktop.Tests` (net4.8, old-style csproj). Cover:
-
-- Insert/remove: tree shape, and the sibling promoted on removal.
-- Layout rects: gaps, no overlaps, union equals the area.
-- Orientation picked from the aspect ratio.
-- Neighbour finding in a 2×2 grid and in asymmetric layouts.
-- Swap, move, and resize, including ratio clamping.
-- TagSet view deltas and moving a window to another tag.
-- FuzzyMatcher ordering: `"vsc"` → "Visual Studio Code" ranks above "Microsoft Visual C++ Redist", `"ff"` → "Firefox", a non-subsequence query gives null, and match positions are correct.
-
-Add both projects to the sln. Run with `dotnet test "Cairo Desktop/Tests/CairoDesktop.Tiling.Core.Tests"`. This works on Linux.
-
----
-
-## Phase 4: `CairoDesktop.Tiling` (Win32 runtime)
-
-New WPF class library with the same TFMs as the other projects (`net480;net6.0-windows;net10.0-windows`). It references `Tiling.Core`, `Interop`, `Common`, `Infrastructure`, `Application`, and the ManagedShell package.
-
-**Why not ManagedShell's `TasksService`?** It decides what counts as a window from taskbar visibility (`ShowInTaskbar`, which considers `IsWindowVisible`). Our own `SW_HIDE` calls would make windows "disappear" from it. We own the registry instead, driven by `SetWinEventHook`.
-
-### Components (folder `CairoDesktop.Tiling/`)
-
-**1. `ManagedWindow`**
-- Fields: `IntPtr Hwnd`, `uint Pid`, `string ClassName`, `string Title` (INotifyPropertyChanged), `ImageSource Icon` (lazy), `bool IsFloating`, `bool IsHiddenByUs`, `IntPtr HMonitor`, and `RectI FloatingRect` (remembered so floating windows return to their spot).
-
-**2. `WindowFilter.ShouldManage(hwnd) → Manage | Float | Ignore`**
-- Ignore when any of these hold:
-  - not `IsWindowVisible`
-  - the window is cloaked (`DWMWA_CLOAKED != 0`)
-  - it has `WS_CHILD`
-  - it has `WS_EX_TOOLWINDOW` without `WS_EX_APPWINDOW`
-  - it has `WS_EX_NOACTIVATE`
-  - it belongs to Cairo's own process
-  - its class is `Progman`, `WorkerW`, `Shell_TrayWnd`, `Shell_SecondaryTrayWnd`, `Windows.UI.Core.CoreWindow`, or `ApplicationFrameInputSinkWindow`
-  - its title is empty and it has no `WS_CAPTION`
-  - its rect is zero-sized
-- Float when any of these hold:
-  - it has an owner (`GetWindow(GW_OWNER) != 0`), i.e. dialogs
-  - its class is `#32770`
-  - it lacks `WS_THICKFRAME` (fixed size)
-  - it has `WS_POPUP` without `WS_CAPTION`
-  - its class or exe is in `Settings.TilingFloatClasses` / `TilingFloatExes`
-- Otherwise: Manage.
-
-**3. `WinEventListener`**
-- Installs `SetWinEventHook` ranges on the WPF dispatcher thread with `WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS`. Keep the delegate in a field so it is not garbage-collected.
-- Filters to `idObject == OBJID_WINDOW && idChild == 0`, and to top-level windows (`GetAncestor(GA_ROOT) == hwnd`).
-- Raises typed events: `Shown`, `Hidden`, `Destroyed`, `Foreground`, `MoveSizeStart`, `MoveSizeEnd`, `MinimizeStart`, `MinimizeEnd`, `NameChanged`, `LocationChanged` (only used to detect maximize/fullscreen), `Cloaked`, and `Uncloaked`.
-
-**4. `HiddenWindowJournal`**
-- Stores the hwnds we hid in `%LOCALAPPDATA%\Cairo Desktop\tiling-hidden.json`. It is rewritten on every hide/show, with a small debounce.
-- `RestoreAll()` calls `ShowWindow(hwnd, SW_SHOWNA)` for every journaled hwnd that `IsWindow` still reports as valid, then clears the journal.
-- `RestoreAll()` is called:
-  - on TilingManager start, which recovers from a previous crash
-  - on `Stop()`
-  - from `CairoApplication.OnExit`
-  - from `AppDomain.CurrentDomain.UnhandledException` and `Dispatcher.UnhandledException` (hook these in `CairoApplication.xaml.cs`)
-  - when tiling is toggled off
-- The journal also records the original `DisableLockWorkstation` value (see 10a), so every one of these restore paths puts the lock policy back too.
-
-**5. `WindowArranger`**
-- `Apply(IEnumerable<(IntPtr hwnd, RectI rect)>)`:
-  - For each window: if `IsZoomed`, `ShowWindow(SW_RESTORE)` first.
-  - Compensate for invisible DWM borders: `delta = GetWindowRect - DWMWA_EXTENDED_FRAME_BOUNDS`, so the target outer rect is the visible rect expanded by that delta.
-  - Batch all windows in one `BeginDeferWindowPos`/`DeferWindowPos`/`EndDeferWindowPos` with `SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_FRAMECHANGED`.
-  - If the batch fails (`EndDeferWindowPos` returns false), fall back to per-window `SetWindowPos`.
-  - A per-window `ERROR_ACCESS_DENIED` means an elevated window under UIPI. Mark it `IsFloating` and log it.
-- `Hide(hwnd)` calls `ShowWindow(SW_HIDE)` and `Show(hwnd)` calls `ShowWindow(SW_SHOWNA)`. Both update the journal and add the hwnd to `_expectedVisibilityChanges`, so the resulting EVENT_OBJECT_HIDE/SHOW is ignored rather than treated as the window closing or opening.
-- `Focus(hwnd)`:
-  - Call `SetForegroundWindow`.
-  - If that fails, send a synthetic Alt key tap (SendInput) and retry. This is the standard foreground-lock workaround.
-  - Raise the window with `SetWindowPos(HWND_TOP, NOMOVE|NOSIZE|NOACTIVATE)`.
-
-**6. `MonitorState`** (one per screen)
-- Holds the `AppBarScreen` (from `IWindowManager.ScreenState`), `TagSet`, and the work area (`GetMonitorInfo(hmon).rcWork`, which already excludes the menu-bar appbar).
-- Exposes a `ScreenTagsViewModel` for the UI (component 9).
-
-**7. `TilingManager : ITilingManager`** (DI singleton, plus a `CairoBackgroundService` wrapper that starts and stops it)
-- **Enable condition:** `Settings.EnableTiling && (EnvironmentHelper.IsAppRunningAsShell || Settings.EnableTilingOutsideShell)`. Re-evaluate when either setting changes.
-- **Start:**
-  - `journal.RestoreAll()`
-  - build a `MonitorState` per screen
-  - `EnumWindows` and classify each window. Already-minimized windows go to the selected tag's `Minimized` list.
-  - assign every window to the selected tag of its monitor (`MonitorFromWindow`)
-  - start the WinEventListener, register hotkeys, enable focus-follows-mouse, relayout everything
-- **Stop:** unregister hotkeys, unhook, `journal.RestoreAll()`, restore the original SPI focus settings, and clear state.
-- **Event handling:**
-
-| Event | Handling |
-|---|---|
-| `Shown` | Ignore if expected or already managed. Otherwise classify and add to the **selected tag of the monitor under the window** (or under the cursor if the window is offscreen). Insert next to the tag's focused leaf, focus it, relayout. |
-| `Destroyed`, or `Hidden` when not expected | Remove the window from its tag. If it was focused, focus a neighbour or the next leaf. Relayout. |
-| `Cloaked` | Treat as hidden (UWP suspend). `Uncloaked` is treated as shown. |
-| `MinimizeStart` | Move to `Minimized`, remove from the tree, relayout. |
-| `MinimizeEnd` | Re-insert and relayout. |
-| `Foreground` | If the window is managed, set `MonitorState.Tag.FocusedWindow` and update `ScreenTagsViewModel.FocusedWindow`. If the window lives on a hidden tag (an app activated itself), switch that monitor to its tag, as awesome does with "urgent jump". Make that switch a setting (`TilingFollowActivation`, default true). Otherwise mark the tag urgent. |
-| `MoveSizeEnd` on a tiled window | If the size changed, `Tree.SetRatioFromRect`. If only the position changed, find the leaf under the cursor (`GetCursorPos` against the layout rects), `Swap`, then relayout. If the cursor is on another monitor, move the window to that monitor's selected tag. |
-| `LocationChanged` on a tiled window | If it has become zoomed (app maximize), `SW_RESTORE` and relayout, unless it is the tag's `FullscreenWindow`. Throttle this event because it is very chatty. |
-| `NameChanged` | Update `ManagedWindow.Title`. |
-
-- **Relayout:** coalesce requests with `Dispatcher.BeginInvoke(DispatcherPriority.Background)` and a dirty flag per monitor. Layout = `Tag.Tree.Layout(workArea, Settings.TilingGap)`. A fullscreen window gets the full monitor bounds with other windows untouched underneath. Floating windows are not moved.
-- **Screens:** subscribe to `IWindowManager.ScreensChanged`.
-  - Added monitor: new `MonitorState`.
-  - Removed monitor: move each of its tags' windows into the same tag index on the primary monitor.
-  - Work-area or DPI change: relayout all.
-- **Public API**, called by hotkeys, commands, and UI:
-  - `ViewTag(screen, i)`, `ViewPreviousTag(screen)`, `MoveFocusedToTag(i)`, `MoveFocusedToScreen(next)`
-  - `FocusDirection(dir)`, `FocusNext()`, `FocusPrev()`, `FocusScreen(next)`
-  - `SwapDirection(dir)`, `MoveDirection(dir)`, `Resize(dir)`, `ToggleOrientation()`, `Equalize()`
-  - `ToggleFloating()`, `ToggleFullscreen()`, `CloseFocused()` (`PostMessage WM_CLOSE`)
-  - `FocusWindow(hwnd)`, `GetScreenModel(AppBarScreen)`
-- "The focused screen" means the monitor of the foreground window, falling back to the cursor's monitor.
-
-**8. `FocusFollowsMouse`**
-- On enable: save the current values of `SPI_GETACTIVEWINDOWTRACKING`, `SPI_GETACTIVEWNDTRKZORDER`, and `SPI_GETACTIVEWNDTRKTIMEOUT`.
-- Set tracking on, z-order raise per `Settings.FocusFollowsMouseRaise` (default false, as in awesome), and timeout per `Settings.FocusFollowsMouseDelayMs` (default 100).
-- Always call with `fWinIni = 0` (do not persist to the user profile), and restore the saved values on disable or exit.
-- This is Windows' built-in "X-mouse". It activates the window under the cursor, and the resulting EVENT_SYSTEM_FOREGROUND updates our focus state.
-- Fallback, only if testing shows problems: a 50 ms `DispatcherTimer` that polls `GetCursorPos` → `WindowFromPoint` → `GetAncestor(GA_ROOT)`. If that window is managed and not the foreground, and no mouse button is down (`GetAsyncKeyState`), call `Focus` without raising. Put the fallback behind the setting `FocusFollowsMouseMode = Native | Polling`.
-- Do not steal focus while a Cairo menu or popup is open. Check whether the foreground window belongs to our process.
-
-**9. `ScreenTagsViewModel`** (INotifyPropertyChanged, one per screen, all access on the UI thread)
-- `ObservableCollection<TagViewModel> Tags`, 10 items. Each `TagViewModel` has `Index`, `Label`, `IsSelected`, `IsOccupied`, `IsUrgent`, and `ICommand ViewCommand` / `MoveHereCommand`.
-- `ObservableCollection<ManagedWindowViewModel> Windows`: the windows on the selected tag, tiled in tree in-order, then floating. Each item has `Title`, `Icon`, `IsFocused`, `IsFloating`, `FocusCommand`, and `CloseCommand`.
-- `ManagedWindowViewModel FocusedWindow`.
-- **Icons:** `WindowIconHelper.GetIcon(hwnd)`:
-  - `SendMessageTimeout(WM_GETICON, ICON_SMALL2/ICON_SMALL/ICON_BIG, 100 ms, SMTO_ABORTIFHUNG)`
-  - falls back to `GetClassLongPtr(GCLP_HICONSM/HICON)`
-  - converts with `Imaging.CreateBitmapSourceFromHIcon` and freezes the result
-  - for UWP `ApplicationFrameWindow`, falls back to a generic icon in v1
-  - fetched lazily and cached per hwnd
-
-**10. `TilingHotKeyService : CairoBackgroundService`**
-- Registers through the existing `CairoDesktop.Common/HotKey.cs` (RegisterHotKey on the UI thread via `_cairoApplication.Dispatch`, the same pattern as `MenuBarHotKeyService`).
-- Each binding invokes an `ICairoCommand` through `ICommandService`, so the Cairo menu can reuse the commands.
-- Directional bindings use **HJKL**, with the arrow keys as aliases. That requires taking Win+L away from Windows; see **10a**.
-- Under Explorer (dev mode), Explorer owns Win+1..0, Win+Arrows, Win+H/K/P and others, so `RegisterHotKey` fails. Log the failures. Add `Settings.TilingModifier` (`"Win"` default, `"Alt+Win"` option) so dev mode can use a different modifier. Optionally, Explorer's own Win shortcuts can be turned off with `HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced` → `DisabledHotkeys` (REG_SZ of letters, e.g. `"HJKLP"`), which takes effect after Explorer restarts. Document this in the Tiling settings tab; don't write it automatically.
-
-**10a. Win+L → HJKL, Win+P → lock**
-
-Win+L can't be caught with `RegisterHotKey` or blocked by a low-level keyboard hook while locking is enabled; Windows handles it below user mode. The known workaround (the same one AutoHotkey uses) is the per-user policy value **`HKCU\Software\Microsoft\Windows\CurrentVersion\Policies\System` → `DisableLockWorkstation` (DWORD)**:
-
-- With `DisableLockWorkstation = 1`, Win+L stops locking and becomes an ordinary key combo we can bind.
-- The catch: that same policy also blocks `LockWorkStation()` and hides "Lock" on the Ctrl+Alt+Del screen. So to lock, we briefly switch the policy off, lock, then switch it back on.
-
-Implementation, in a new `CairoDesktop.Tiling/WorkstationLockManager.cs`:
-- `Settings.RemapWinL` (default **true**). It only applies when Cairo runs as the shell, or when `EnableTilingOutsideShell` is on.
-- **Enable**, at TilingManager start:
-  - Read and remember the existing value. It may be missing, or an admin may have set it to 1.
-  - Write `DisableLockWorkstation = 1`.
-  - Save the original value in the crash journal (component 4), using the same file or a sibling `tiling-state.json`, so it can be put back later.
-- **Lock** (`Lock()`):
-  1. Write `DisableLockWorkstation = 0`.
-  2. Call `LockWorkStation()` (user32 P/Invoke; add it to `User32.cs`).
-  3. After ~1 s (a `DispatcherTimer`, so the lock has taken effect), write `1` again.
-  - If writing fails, still call `LockWorkStation()`. Never leave the user unable to lock.
-- **Disable**, on Stop, exit, crash handlers, and `RestoreAll()` at startup: write back the original value, or delete the value if it didn't exist before. This is critical. If Cairo dies and the value stays at 1, the user can't lock with Win+L even under normal Explorer until Cairo restarts or they fix it. The startup restore covers that.
-- **If an administrator already set the policy to 1:** don't fight it. Treat the remap as already active, and in `Lock()` skip writing 0 (LockWorkStation will just fail, matching what the admin wanted). Log it.
-- **Permissions:** `HKCU\...\Policies\System` is normally writable by the user, but some locked-down machines deny it. On `UnauthorizedAccessException`:
-  - log it
-  - leave Win+L as the Windows lock key
-  - fall back to arrow keys only for the Win+L binding; H/J/K still work
-  - show a one-line note in the Tiling settings tab
-- **Binding Win+L after disabling:** register it with `RegisterHotKey` first. If that fails (Windows may still keep the combo reserved even with the policy set), fall back to the existing `CairoDesktop.Common/LowLevelKeyboardListener.cs` for this one combo. Its "stuck key" problem (see the comment in `MenuBarHotKeyService`) has to be fixed first, by tracking key-ups for the Win key and swallowing only the L down/up. **Test both paths in the VM before building on either.**
-- **Wire up the existing lock command:** change `Cairo Desktop/Commands/LockCommand.cs` (it currently calls `ShellHelper.Lock()`) to call `WorkstationLockManager.Lock()` when the remap is active. The Cairo menu's "Lock" item and Win+P then both work.
-- **Win+P:**
-  - Under Explorer it opens the "Project" display switcher. In shell mode Explorer isn't running, so `RegisterHotKey(Win+P)` should succeed; confirm this in testing.
-  - Bind Win+P → `Lock` only in shell mode, or when `RemapWinL` is active.
-  - The display-projection switcher can still be opened from Cairo menu → Window Manager ▸ "Display projection…" (runs `DisplaySwitch.exe`).
-- **Ctrl+Alt+Del:** it is not affected and can't be (it's the secure attention sequence). Only its "Lock" option is hidden while the policy is 1, which is acceptable because Win+P covers it.
-
-**Other Explorer Win shortcuts in shell mode:** Win+H (dictation), Win+K (Cast), Win+J, Win+O, Win+T, and Win+P are Explorer or shell-experience hotkeys. With Cairo as the shell they should be free for `RegisterHotKey`. Log every registration failure at Warning level with the key combo, so conflicts are obvious.
-
-Default keymap:
-
-| Keys | Action | Command id |
+| Question | If yes | If no |
 |---|---|---|
-| Win+1..9, Win+0 | View tag 1..10 on the focused screen | `TilingViewTag` (param `Index`) |
-| Win+Shift+1..9, 0 | Move the focused window to tag N; focus stays on the current tag | `TilingMoveToTag` |
-| Win+Escape | View the previous tag | `TilingViewPreviousTag` |
-| Win+H/J/K/L (and Win+←↓↑→) | Focus in direction (left/down/up/right) | `TilingFocusDirection` |
-| Win+Shift+H/J/K/L (and arrows) | Swap with neighbour in direction | `TilingSwapDirection` |
-| Win+Ctrl+Shift+H/J/K/L (and arrows) | Move into neighbour's split | `TilingMoveDirection` |
-| Win+Ctrl+H/J/K/L (and arrows) | Resize by moving the split edge (5% step) | `TilingResize` |
-| Win+Tab / Win+Shift+Tab | Focus next / previous window (in-order) | `TilingFocusNext` / `TilingFocusPrev` |
-| Win+P | Lock the workstation (shell mode or `RemapWinL`; see 10a) | `Lock` |
-| Win+T | Toggle the orientation of the focused window's parent split | `TilingToggleOrientation` |
-| Win+Shift+E | Equalize splits on the tag | `TilingEqualize` |
-| Win+Ctrl+Space | Toggle floating | `TilingToggleFloating` |
-| Win+F | Toggle fullscreen | `TilingToggleFullscreen` |
-| Win+Shift+C | Close the focused window | `TilingCloseWindow` |
-| Win+Period / Win+Comma | Focus next / previous screen | `TilingFocusScreen` |
-| Win+O | Move the focused window to the next screen | `TilingMoveToScreen` |
-| Win+Enter | Launch the terminal (`Settings.TerminalCommand`, default `wt.exe`, falling back to `cmd.exe`) | `TilingLaunchTerminal` |
-| Win+R | Program launcher (Phase 6) | `ToggleProgramLauncher` |
-| Win+Ctrl+R | Restart Cairo | existing restart path (`CairoApplication.RestartCairo`) |
+| Does CustomShellHost own `Shell_TrayWnd`? | Phase 1 step 6: check whether ManagedShell's tray still receives icons, and only fix it if it doesn't | Nothing to do |
+| Is `GetShellWindow()` non-zero before Cairo starts? | Rely on `/shell=true` to force shell mode, and accept that `SetShellWindow` fails (the wallpaper windows still work) | Nothing to do |
+| Does a non-Microsoft-signed `CairoDesktop.exe` start? | Nothing to do | Sign `CairoDesktop.exe` with the existing local certificate (`New-CairoSigningCertificate.ps1`; `Build-Installer.ps1` already signs the UIAccess copy) |
+| Which Win hotkeys does CustomShellHost own? | Leave them to the existing keyboard-hook fallback in `TilingHotKeyService` | — |
 
-Keep a single `TilingKeymap` table class so changing a binding means editing one place. Making the keymap user-configurable is out of scope for v1.
+### Spike results
 
-**11. DI registration** in `Cairo Desktop/Program.cs`:
-- `services.AddSingleton<ITilingManager, TilingManager>()`
-- `services.AddHostedService<TilingHotKeyService>()` and the start/stop service
-- one `services.AddSingleton<ICairoCommand, ...>` per command class, in `CairoDesktop.Tiling/Commands/`, following the pattern of `CairoDesktop.MenuBar/Commands/ToggleProgramsMenuCommand.cs`: an `ICairoCommand` with an `Info` class that has an `Identifier`, `Label` (localized), and `IsAvailable` bound to tiling being enabled
-- add a ProjectReference to `CairoDesktop.Tiling` from `Cairo Desktop.csproj` and from `CairoDesktop.MenuBar.csproj` (MenuBar needs `ITilingManager` and the view models)
+Not run yet: it needs a sign-out under Shell Launcher. The code was written so each branch above works either way:
+- `ShellHost.IsShellLauncher` forces `IsAppRunningAsShell`, so a non-zero `GetShellWindow()` doesn't matter.
+- The tray (step 6) is untouched until the spike shows it gets no icons.
+- `Test-CairoEnvironment.ps1` only checks the UIAccess copy's signature; extend it to `CairoDesktop.exe` if the spike finds unsigned exes don't start.
+- Phase 2 step 4 ships both hide modes: `SW_HIDE` by default, and `Settings.TilingParkUwpWindows` switches UWP frames to off-screen parking without a rebuild.
 
-**12. New settings** in `CairoDesktop.Common/Settings.cs`, each with a field, a property using `Set(ref ...)`, and a default:
-- `EnableTiling` = true, `EnableTilingOutsideShell` = false
-- `TilingGap` = 6, `TilingFollowActivation` = true
-- `TilingFloatClasses` = `[]`, `TilingFloatExes` = `[]`
-- `TilingModifier` = "Win"
-- `EnableFocusFollowsMouse` = true, `FocusFollowsMouseRaise` = false, `FocusFollowsMouseDelayMs` = 100, `FocusFollowsMouseMode` = "Native"
-- `TerminalCommand` = "wt.exe"
-- `RemapWinL` = true: take Win+L away from Windows so it can be bound to tiling, and move locking to Win+P (see 10a)
-- Change the default of `EnableMenuBarMultiMon` to true, because tags are per screen and each screen needs its own bar.
+| Question | Answer |
+|---|---|
+| Does CustomShellHost own `Shell_TrayWnd`? | |
+| Is `GetShellWindow()` non-zero before Cairo starts? | |
+| Does a non-Microsoft-signed `CairoDesktop.exe` start? | |
+| Which Win hotkeys does CustomShellHost own? | |
+| Does the WMI bridge write enable the features by itself (and need a reboot)? | |
+| Phase 2: do UWP frames survive `SW_HIDE`/`SW_SHOWNA`? | |
 
 ---
 
-## Phase 5: Top bar
+## Phase 1: Swap to Shell Launcher v2
 
-### Layout
+### 1. Scripts (repo root). Delete `Start-CairoShell.ps1`.
 
-The target is `CairoDesktop.MenuBar/MenuBar.xaml`, a DockPanel `CairoMenuBarContainer`:
+- **`Enable-CairoShellLauncher.ps1`** (asks for elevation):
+  - Enable the two optional features. If a reboot is needed, say so and stop.
+  - Generate the XML:
+    - `DefaultProfile` → `%SystemRoot%\explorer.exe`, so any other account still gets Explorer.
+    - Cairo `Profile` → `"<InstallDir>\CairoDesktop.exe" /shell=true /shelllauncher=true`, with `AppType=Desktop` and `AllAppsFullScreen=false`.
+    - `ReturnCodeAction`s: `1` → `DoNothing` (Cairo exited on purpose), `3` → `RestartShell` (Cairo asked to restart). `DefaultAction` → `RestartShell` (a crash).
+    - `Config`: `.\$env:USERNAME` → the Cairo profile. `-User` can override the account.
+  - Write the XML as SYSTEM through a one-shot scheduled task: `Register-ScheduledTask -User SYSTEM`, run it, wait, then unregister. That avoids needing psexec.
+  - Read the value back, print any new `AssignedAccess/Admin` events, and offer to sign out.
+  - Find the install directory from `HKLM\Software\CairoShell\Install_Dir`, which the NSIS installer writes.
+- **`Disable-CairoShellLauncher.ps1`** (asks for elevation): same SYSTEM-task method, sets `ShellLauncher = $null`. Its header documents how to recover:
+  - Ctrl+Shift+Esc → Run new task → tick "admin" → `powershell -File ...\Disable-CairoShellLauncher.ps1`.
+  - In the same session you can also start `explorer.exe` from there.
+- **`Deploy-Cairo.ps1`** (the dev loop):
+  1. `Build-Installer.ps1`.
+  2. `taskkill /F` both `CairoDesktop.exe` and `CairoDesktop.UIAccess.exe`. A forced kill exits with code 1, which maps to `DoNothing`, so Shell Launcher doesn't restart Cairo while the files are being replaced. Windows hidden by the tiler come back on the next start through `HiddenWindowJournal.RestoreAll()`.
+  3. Run the installer silently (`/S`).
+  4. Start the installed Cairo with the same arguments as the XML. Shell Launcher won't watch it until the next sign-in, and the script prints that.
+- Update `README.md` for the new flow: certificate (once) → run the installer → pick "Use Cairo as my shell" → sign out. The installer calls these scripts (step 7). Running them by hand is for development and recovery.
 
-```
-[Menu: CairoMenu] [control:TagBar] ............ [MenuExtrasHost (Dock=Right)]
-                                  [control:WindowList  ← last child, fills]
-```
+### 2. Shell Launcher mode in Cairo
 
-- The left StackPanel `CairoMenuBar` keeps the `Menu` with only `CairoMenu`, then `<control:TagBar x:Name="tagBar"/>`.
-- `MenuExtrasHost` stays unchanged: tray, volume, clock, search. Delete the ActionCenter extra, which is only shown outside shell mode, or leave it.
-- `<control:WindowList x:Name="windowList"/>` replaces `StacksContainer` as the last child.
+- Add a `ShellLauncher` command-line option next to `Shell`/`NoShell`. Find where `_options.CurrentValue.Shell` is defined.
+- Add a static `ShellHost` class in `CairoDesktop.Common`:
+  - `IsShellLauncher`: the option is set, or a fallback check finds a `CustomShellHost.exe` process in this session.
+  - `HasImmersiveShell => !EnvironmentHelper.IsAppRunningAsShell || IsShellLauncher`.
+- Set it in `SetIsCairoRunningAsShell()` (`CairoApplicationInitializationService.InitializationRoutines.cs:34`) and log it.
 
-### Wiring
+### 3. Process lifetime: Shell Launcher only watches the process it started
 
-- `CairoDesktop.MenuBar/Services/MenuBarWindowService.cs` `OpenWindow`: inject `ITilingManager` and pass it into the `MenuBar` constructor.
-- In `MenuBar` `setupChildren()`:
-  - `var model = _tilingManager.GetScreenModel(Screen)`
-  - `tagBar.DataContext = model; windowList.DataContext = model;`
-  - `Visibility = Collapsed` when tiling is disabled
-- Subscribe to an `ITilingManager.EnabledChanged` event and re-bind when it fires.
-- Screens are matched by `AppBarScreen.DeviceName`, because `AppBarScreen` instances are recreated on display changes.
+- **`UIAccessLauncher.TryHandOff`** (`Cairo Desktop/UIAccessLauncher.cs`): return the started `Process`. In Shell Launcher mode, `Program.cs` waits for that process and exits with its exit code. That turns the original exe into a small supervisor, so code 1 or 3 reaches Shell Launcher. The command-line arguments are already passed through by `GetArguments()`.
+- **`RestartCairo()`** (`CairoApplication.xaml.cs:245`): in Shell Launcher mode, don't start a new process. Restore the tiled windows and shut down with exit code **3**.
+- **`OnExit`** currently forces exit code 1 in shell mode. Change it to keep a requested exit code (3), and otherwise use 1. The render-thread failure path and the user-restart path call `RestartCairo` and then `FailFast`. Under Shell Launcher, use the exit-code-3 shutdown instead.
+- **Crash-loop guard:** at startup in Shell Launcher mode, add a timestamp to `%LOCALAPPDATA%\Cairo Desktop\starts.txt`. If there are 3 or more starts within 60 s, show a `CairoMessage` ("Cairo keeps crashing — opening Task Manager"), start `taskmgr.exe`, and exit with 1 (`DoNothing`). A shutdown with exit code 3 doesn't count as a crash, because the restarted process is started without `/restart`. Put the guard in a new small class `Cairo Desktop/SupportingClasses/CrashLoopGuard.cs`.
 
-### `TagBar.xaml(.cs)` (UserControl in `CairoDesktop.MenuBar/`)
+### 4. Things Shell Launcher already handles
 
-- An `ItemsControl` over `Tags` with a horizontal `StackPanel` items panel. Each tag is a ~22px-wide button/border showing `Label`.
-- Visual states, via theme brushes added to `Themes/Cairo.xaml` and given fallbacks in the other themes:
-  - **selected:** accent background, bold
-  - **occupied:** small dot or underline
-  - **urgent:** warning colour
-  - **empty and unselected:** dimmed text
-- Mouse:
-  - left-click: `ViewCommand`
-  - right-click: `MoveHereCommand` (move the focused window here)
-  - scroll wheel: view the next or previous tag, as in awesome
-- Before choosing brush names, check how themes merge (does `Cairo.xaml` always load as the base, with other themes overriding brushes?). Look at `Cairo Desktop/Services/ThemeService` or `CairoApplication.SetTheme`.
+- `StartupRunner` (`CairoApplication.xaml.cs:105`): skip it when `ShellHost.IsShellLauncher`. Shell Launcher already runs the `Run` and `RunOnce` keys, so they would otherwise start twice.
 
-### `WindowList.xaml(.cs)` (UserControl)
+### 5. Settings and commands that depend on Explorer's UWP support
 
-- An `ItemsControl` over `Windows` with a horizontal panel. Items share the available width (a `UniformGrid Rows=1`, or a custom panel with a max item width of ~200px) and the text is ellipsized.
-- Each item shows a 16px `Icon` and `Title`, plus a small marker when floating.
-- `IsFocused`: highlighted background, the same style family as the old `CairoTaskbarButtonActiveStyle` but restyled for the menu bar height.
-- Mouse: left-click focuses, middle-click closes, and right-click opens a context menu with Float toggle, Move to tag ▸ 1–10, and Close.
+- Switch the gates from `IsAppRunningAsShell` to `ShellHost.HasImmersiveShell` in:
+  - `OpenWindowsSettingsCommand.cs:29`
+  - `ActionCenterMenuBarExtension.cs:20`
+  - `OpenDisplayControlPanelCommand.cs:29`
+  - the two `SettingsUI.xaml.cs` branches at 468 and 472, which decide which extras checkboxes show
+- `VolumeMenuBarExtension.cs:21` stays shell-only: Explorer's volume icon isn't there under CustomShellHost.
+- **Settings → Advanced, "Change shell" (`btnChangeShell_Click`, `SettingsUI.xaml.cs:780`):** replace the Winlogon toggle with a Shell Launcher status line, plus one button that runs `Enable-` or `Disable-CairoShellLauncher.ps1` elevated (`runas`). Ship the scripts with the installer, so the NSIS script copies them to `$INSTDIR`.
+  - `IsAppConfiguredAsShell` (`checkRunAtLogOn`, line 650) becomes "configured through Shell Launcher". Detect that cheaply, without SYSTEM: the profile marker `HKCU\Software\CairoShell\ShellLauncher=1`, written by the Enable script and removed by the Disable script.
+- **Localization:** add the new strings to `DisplayString.cs`/`Language.cs`, following the existing pattern.
 
-### Cairo menu (top-left) settings
+### 6. Tray (only if the spike shows CustomShellHost owns `Shell_TrayWnd` and Cairo gets no icons)
 
-The user wants settings to live here. Today `MenuBar.xaml.cs CairoMenu_Opened` builds a flat list of command ids (`cairoMenuItems`).
+- Find out whether ManagedShell 0.0.358's `TrayService` can take over first: it creates a topmost `Shell_TrayWnd` and re-sends `TaskbarCreated`.
+- If it can't, record that as a known limitation instead of building a workaround now.
 
-- Add a **"Window Manager" submenu** after `OpenCairoSettings`:
-  - checkable items bound to settings: Tiling enabled, Focus follows mouse, Raise on focus, Follow app activation
-  - a "Gaps" submenu with 0 / 4 / 6 / 10 / 16 as radio-style items
-  - Equalize current tag
-  - "Window manager settings…", which opens SettingsUI on a new "Tiling" tab
-- Implementation: allow a `string[]` entry to name a submenu builder, or build this submenu in a dedicated helper `BuildWindowManagerMenu()` that inserts after `OpenCairoSettings`. Keep the existing pattern of `INotifyPropertyChanged` for live updates. Use `Settings.PropertyChanged` for the IsChecked state.
-- Final top-level list:
-  - AboutCairo, CheckForUpdates
-  - | OpenCairoSettings, **Window Manager ▸**, OpenControlPanel, OpenWindowsSettings
-  - | ShowRunDialog, StartTaskManager
-  - | ExitCairo
-  - | Sleep, Hibernate, Restart, ShutDown
-  - | Lock, LogOff
+### 7. Setup runs at install and first startup, not by hand
 
-### SettingsUI "Tiling" tab
+The scripts from step 1 become the engine. The installer runs them, and Cairo checks the result on first startup. Running the scripts by hand is only for development and recovery.
 
-Add it to `Cairo Desktop/SettingsUI.xaml` in place of the removed Desktop/Taskbar tabs. Bind to the Phase 4 settings: checkboxes, a gap slider or combo, the modifier combo, a terminal command textbox, and float class/exe lists as comma-separated textboxes. Add the `"tiling"` tab id to `SettingsUIService.Show`. Add localization keys `sSettings_Tiling*` (English, at minimum; other languages fall back to English, so check how `Language.cs` falls back).
+**What the installer has today** (`Installer/CairoShell.nsi`):
+- It runs elevated (`RequestExecutionLevel Admin`).
+- It ships a self-contained .NET build (`Build-Installer.ps1`), so no .NET runtime check is needed. The `net480` build still runs `AbortIfBadFramework`.
+- Its components are: Cairo (required); `startupCU`, which writes the HKCU `Run` value `CairoShell` and is on by default; and `shellCU`, which writes the HKCU Winlogon `Shell` value.
+- Uninstall deletes the `Run` and Winlogon values, then removes `$INSTDIR`.
+
+**Installer changes:**
+- **Replace the components with one choice on a custom nsDialogs page:**
+  - **"Use Cairo as my shell (replaces Explorer)"**, through Shell Launcher.
+  - **"Run Cairo alongside Explorer at sign-in"**, through the `Run` key.
+  - **"Don't start Cairo automatically"**.
+  - Remember the choice in `HKLM\Software\CairoShell\StartMode`. On an upgrade, or with `/S` (silent, which `Deploy-Cairo.ps1` uses), reuse the saved choice. A silent install never shows a prompt.
+- **Environment checks before Next is allowed.** These run in a bundled read-only `Test-CairoEnvironment.ps1`. It returns JSON, which the page shows as a pass/warn/fail list:
+  - **Windows edition:** Enterprise, Education or IoT Enterprise, by `EditionID`. Otherwise "Use Cairo as my shell" is disabled with the reason, and the other two choices stay available. Pro and Home have no supported way to run UWP apps without Explorer, which is why the old Winlogon method goes away.
+  - **Target account:** the user signed in at the console, not the elevated account. An admin entering their password over a standard user's session would otherwise configure the wrong person. Find the user with `Win32_ComputerSystem.UserName`, resolve its SID, and put `<Account Sid="..."/>` in the XML; the XSD allows `Sid`. Show "Cairo will be the shell for DOMAIN\user".
+  - **Existing assigned-access or MDM policy:** if `MDM_AssignedAccess` already has a kiosk `Configuration`, or a `ShellLauncher` value that Cairo didn't write, warn that it will be replaced, or that MDM (Intune) may overwrite it. Leave the choice to the user.
+  - **Shell Launcher feature state:** enabled, not enabled, or reboot pending.
+  - **UIAccess signature:** `Get-AuthenticodeSignature` on `CairoDesktop.UIAccess.exe`. If it isn't `Valid` on this machine (the local certificate isn't trusted here), warn that Cairo can't manage windows running as administrator. This is a warning, not a blocker. If the Phase 0 spike finds that CustomShellHost needs a signed `CairoDesktop.exe`, this check covers the main exe too and blocks the shell choice.
+  - **Leftovers from earlier installs:** an HKCU or HKLM Winlogon `Shell` value pointing at Cairo, and an HKCU `Run` value `CairoShell`. Remove both when "Use Cairo as my shell" is chosen. Shell Launcher runs the `Run` keys before the shell, so a leftover `Run` value would start Cairo twice.
+- **Apply after the files are installed:**
+  - Shell choice: `ExecWait` `Enable-CairoShellLauncher.ps1 -Sid <sid>`, which enables the feature and writes the XML as SYSTEM.
+    - If DISM returns 3010 (reboot required), call `SetRebootFlag true` and change the finish page to "Restart to finish". Microsoft's docs say writing through the AssignedAccess CSP enables the feature by itself. Phase 0 checks whether the WMI bridge does the same; if so, skip the separate DISM call.
+    - The Win+L fix that `WorkstationLockManager.FixPolicyAccessAsync` asks admin approval for (the ACL on HKCU `Policies\System`) happens here too. The installer is already elevated, so first startup needs no second UAC prompt.
+  - "Alongside Explorer" choice: write the `Run` value, and make sure no Shell Launcher config for this user remains.
+  - **Finish page:**
+    - Shell choice: "Sign out now" / "Later", instead of "Run Cairo". Starting Cairo in place of Explorer in the current session isn't what Shell Launcher does.
+    - Other choices: keep "Run Cairo".
+- **Uninstall:** run `Disable-CairoShellLauncher.ps1` *before* removing `$INSTDIR`. Otherwise the next sign-in points Shell Launcher at a missing exe, which leaves a black screen and a restart loop. Also delete `StartMode` and the profile marker `HKCU\Software\CairoShell\ShellLauncher`.
+- **Ship the scripts:** `Enable-`, `Disable-`, `Test-CairoEnvironment.ps1`. Put them in `$INSTDIR\Setup\`, and have the installer call them with `-ExecutionPolicy Bypass`.
+
+**First startup:**
+- Extend the first-run `Welcome` window (`Cairo Desktop/Welcome.xaml(.cs)`, which already clears `Settings.IsFirstRun`) with a **"Setup check"** step. It also opens on any startup where the check fails, until the user dismisses it. It runs the same `Test-CairoEnvironment.ps1` checks, plus things only Cairo can see:
+  - **Shell choice made, but still under Explorer** (signed in before signing out): "Sign out to start Cairo as your shell", with a Sign out button.
+  - **Shell Launcher configured, but Cairo wasn't started by it** (`ShellHost.IsShellLauncher` is false while the marker is set): offer to re-apply the config.
+  - **Running under Shell Launcher, but the config targets a different account or SID:** offer to re-apply.
+  - **The Win+L policy is still unwritable:** the existing `LockPolicyPrompt` already covers this, so fold it into this list instead of a separate popup.
+  - **Duplicate `Run` value while under Shell Launcher:** offer to remove it.
+- Each fix runs the matching bundled script elevated (`runas`), the same way `WorkstationLockManager.FixPolicyAccessAsync` does it.
+- The Settings → Advanced button from step 5 opens this same check, so changing modes later uses one code path.
+
+**Research to finish before building this:**
+- NSIS: is a custom page with a dynamic checklist easier with `nsDialogs` + `nsJSON`, or by having PowerShell write an INI file that NSIS reads with `ReadINIStr`? (The INI route avoids adding plugins.)
+- When the WMI bridge write auto-enables the feature, does it need a reboot before the first sign-in? (Phase 0.)
+- Does `Win32_ComputerSystem.UserName` give the right user under RDP or fast user switching? Fallback: `WTSQuerySessionInformation` on the active console session.
+- Does a machine enrolled in MDM let a local MDM-bridge write stand, or reset it at the next sync?
+
+### 8. Lone Win tap does nothing
+
+- `LowLevelKeyboardListener` (`CairoDesktop.Common/LowLevelKeyboardListener.cs`) already masks Win with `SendMaskKey()` after a hotkey it swallowed. Add an opt-in `MaskLoneWin` flag: when Win goes up and nothing else was pressed since Win went down (`keysPressed.Count == 1`), send the mask key before passing the key-up on. Then Start never opens.
+- Also swallow Ctrl+Esc when the flag is on.
+- `TilingHotKeyService.Register()` keeps a listener alive while `ShellHost.IsShellLauncher`, even when there are no hooked entries, and sets the flag.
+- Win+drag (`WindowDragger`) already masks Win on its own.
 
 ---
 
-## Phase 6: Fuzzy program launcher (installed programs only)
+## Phase 2: Tiling UWP apps
 
-**Location:** `CairoDesktop.MenuBar/Launcher/`. MenuBar already references AppGrabber.
+Start with a short spike: run `Get-ShellDiagnostics.ps1 -Uwp`, then open, minimize, switch tags, switch virtual desktops, and close Calculator, Settings and Store. Log the window events (Shown, Hidden, Cloaked, Uncloaked, Destroyed) for each `ApplicationFrameWindow`. The steps below have their fallbacks marked; the spike decides between them.
 
-**1. `ProgramIndex`** (singleton, registered in DI)
-- Source: `IAppGrabber.GetApps()` (`CairoDesktop.AppGrabber/AppGrabberService.cs:128`). It already enumerates the user and common Start Menu folders (`searchLocations`) plus Store apps, excludes `\Startup`, and returns `ApplicationInfo` (Name, Path, Target, IsStoreApp, Icon). This is exactly "installed programs only". **Do not** include the files or Windows Search results that the Search extra provides.
-- Build the index on a background thread at startup and dedupe by `(Name, Target ?? Path)`.
-- Refresh in the background when the launcher opens if the index is older than 10 minutes. Also refresh from a debounced (2 s) `FileSystemWatcher` on the Start Menu folders.
-- Expose an immutable snapshot list.
-- Load icons lazily. Check how `ApplicationInfo.Icon` loads; it is probably already lazy/async. Use it if so.
+1. **Filter** (`CairoDesktop.Tiling/WindowFilter.cs`):
+   - Manage an `ApplicationFrameWindow` when it isn't cloaked and has a `Windows.UI.Core.CoreWindow` child or a title. Leftover frames have neither.
+   - `Windows.UI.Core.CoreWindow` and `ApplicationFrameInputSinkWindow` stay ignored.
+2. **Identity** (`ManagedWindow.cs`):
+   - For frame windows, find the hosted app from the child `CoreWindow`'s process (its exe name). Also read its AUMID with `SHGetPropertyStoreForWindow` + `PKEY_AppUserModel_ID`; the interop goes in `CairoDesktop.Interop`.
+   - Re-resolve it on `NameChanged`, because the child is attached after the frame appears.
+   - Float rules (`TilingFloatExes`) then match `Calculator.exe` or the AUMID instead of `ApplicationFrameHost.exe`.
+3. **Icons** (`WindowIconHelper.cs:26`, currently a generic icon): load the icon for `shell:AppsFolder\<AUMID>` through `IShellItemImageFactory`, and cache it per AUMID.
+4. **Hiding on tag switches** (`WindowArranger.Hide/Show`):
+   - Try `SW_HIDE`/`SW_SHOWNA` first.
+   - If the spike shows a blank or suspended frame, or a lost window, add `ManagedWindow.HideMode = Offscreen` for frame windows. Park them at (-32000, -32000), and record their original rect in `HiddenWindowJournal` so `RestoreAll()` puts them back after a crash.
+5. **Windows hidden by the system:** today `Cloaked` → `Unmanage` (`TilingManager.Listener_WindowEvent`). That makes a UWP window lose its tag whenever it suspends or moves to another virtual desktop.
+   - For a window that is managed and still exists, treat a cloak like a minimize: remember its state, `SetState(Minimized)`, and keep it out of the window list. On `Uncloaked`, put the old state back.
+   - Unmanage on `Destroyed`, or when an uncloak check finds the `CoreWindow` child gone.
+   - Track this as `ManagedWindow.IsSystemCloaked`, so it's separate from cloaks the tiler causes itself.
+6. **Fullscreen:** `UpdateAutoFullscreen` requires a window with no caption. UWP frames keep `WS_CAPTION` when an app goes fullscreen (F11, or "full screen" in Settings), so for frame windows treat covering the whole monitor as fullscreen.
+7. **Launching** (`AppGrabberService.LaunchProgram`, ~line 390):
+   - When `ShellHost.HasImmersiveShell`, start every Store app through `ShellHelper.ActivateApplication(app.Target)`, not only full-trust ones. The existing comment ("Non-FullTrust apps ... will hang us") only applies without UWP support.
+   - Call it on a background thread, so a slow activation can't freeze the UI.
+8. Remove the now-stale UWP note in `plan.md` (old line 527) once 4 and 5 are settled.
 
-**2. `LaunchHistory`**
-- `%LOCALAPPDATA%\Cairo Desktop\launcher-history.json`, a map of `key → { count, lastUsedUtc }`.
-- `Frecency = count * decay(lastUsed)`.
+## Known limitations to document (not fixed in this plan)
 
-**3. `ProgramLauncherWindow.xaml(.cs)`**
-- A borderless, topmost, `ShowInTaskbar=false` WPF window. It is ~600px wide, centred horizontally on the focused screen, and placed just below that screen's menu bar. Style it with the menu theme brushes.
-- Contents: a search `TextBox` and a `ListBox` of the top 10 `FuzzyMatcher.Rank(...)` results. Each result shows its icon, its name with the matched characters in bold (using `MatchPositions`), and a dim secondary line with the exe name.
-- Primary key is `Name`; the secondary key is the file name of `Target` (or `Path`) without extension.
-- Keys:
-  - typing filters results live (synchronously; the list is small, ~hundreds of items)
-  - ↑/↓, Ctrl+J/K, and Tab/Shift+Tab move the selection
-  - Enter launches via `IAppGrabber.LaunchProgram(app)` and records history
-  - Ctrl+Enter runs as admin via `LaunchProgramAdmin`
-  - Escape closes
-  - losing activation (`Deactivated`) closes
-- On show: call `Activate()` and focus the TextBox. Use the `AllowSetForegroundWindow`/Alt-tap helper from `WindowArranger.Focus`, since the window is opened from a hotkey.
-- The tiling engine must ignore this window. It already does, because it belongs to Cairo's process.
-
-**4. `ToggleProgramLauncherCommand`**
-- Identifier `ToggleProgramLauncher`. Opens the launcher on the focused screen, or closes it if open.
-- Bind it to Win+R in `TilingHotKeyService` (remove Win+R → ShowRunDialog from `ShellHotKeyService`). It also works when tiling is off: register Win+R in `ShellHotKeyService` itself if tiling is disabled.
-- The classic Run dialog stays reachable from the Cairo menu.
-
----
-
-## Phase 7: Polish and edge cases (v1 checklist)
-
-- **Restore safety:** on any startup, call `HiddenWindowJournal.RestoreAll()` before anything else. Also do a sanity sweep: any top-level window that is hidden and journaled gets shown.
-- **UWP apps** (`ApplicationFrameWindow`): moving them works, but SW_HIDE on frame-hosted windows can misbehave. If testing shows problems, hide these by moving them offscreen to `(-32000, -32000)` instead, behind a flag on `ManagedWindow`.
-- **Elevated windows:** we can't move them (UIPI). They float automatically after `ERROR_ACCESS_DENIED`. Document this in the settings tab.
-- **Fullscreen apps and games:** if a window covers its monitor and has no caption (`FullScreenHelper` in ManagedShell detects this), do not tile it. Treat it as fullscreen.
-- **Never hide windows we don't manage.**
-- **Logging:** use `ShellLogger` for every hide, show, and arrange failure, at Debug level.
-- **Out of scope for v1:** saving layouts across restarts, toggle-view (several tags visible at once), per-tag layouts other than BSP, a configurable keymap, and Win+drag to move or resize floating windows.
-
----
+- Toast notifications don't work under CustomShellHost (community report).
+- Network and volume tray icons come from Explorer, so they're missing. Cairo's own Volume extra covers volume.
+- Virtual desktops work, but the tiler treats windows on other desktops like minimized ones (Phase 2 step 5). It has no per-desktop tags.
 
 ## Critical files
 
-**Modified**
-- `Cairo Desktop/Cairo Desktop/Program.cs`
-- `Cairo Desktop/Cairo Desktop/CairoApplication.xaml.cs`
-- `Cairo Desktop/Cairo Desktop/CairoApplicationInitializationService.InitializationRoutines.cs`
-- `Cairo Desktop/Cairo Desktop/Services/ShellHotKeyService.cs`
-- `Cairo Desktop/Cairo Desktop/Services/SettingsUIService.cs`
-- `Cairo Desktop/Cairo Desktop/SettingsUI.xaml(.cs)`
-- `Cairo Desktop/Cairo Desktop/Welcome.xaml(.cs)`
-- `Cairo Desktop/Cairo Desktop/Themes/*.xaml`
-- `Cairo Desktop/CairoDesktop.MenuBar/MenuBar.xaml(.cs)`
-- `Cairo Desktop/CairoDesktop.MenuBar/Services/MenuBarWindowService.cs`
-- `Cairo Desktop/CairoDesktop.MenuBar/Services/MenuBarHotKeyService.cs`
-- `Cairo Desktop/CairoDesktop.Common/Settings.cs`
-- `Cairo Desktop/CairoDesktop.Common/Localization/{DisplayString,Language}.cs`
-- `Cairo Desktop/CairoDesktop.Application/Interfaces/ICairoApplication.cs`
-- `Cairo Desktop/CairoDesktop.Interop/` (new `User32.cs`, `Dwmapi.cs`)
-- `Cairo Desktop/Cairo Desktop.sln`
+- **New:**
+  - scripts: `Enable-CairoShellLauncher.ps1`, `Disable-CairoShellLauncher.ps1`, `Test-CairoEnvironment.ps1`, `Deploy-Cairo.ps1`, `Get-ShellDiagnostics.ps1`
+  - the installer's start-mode/environment-check page, and the "Setup check" step in `Welcome.xaml(.cs)`
+  - `CairoDesktop.Common/ShellHost.cs`
+  - `Cairo Desktop/SupportingClasses/CrashLoopGuard.cs`
+- **Delete:** `Start-CairoShell.ps1`
+- **Edit:**
+  - startup and lifetime: `Program.cs`, `UIAccessLauncher.cs`, `CairoApplication.xaml.cs`, `CairoApplicationInitializationService.InitializationRoutines.cs`, the command-line options class
+  - settings and gates: `SettingsUI.xaml(.cs)`, `OpenWindowsSettingsCommand.cs`, `OpenDisplayControlPanelCommand.cs`, `ActionCenterMenuBarExtension.cs`
+  - keyboard: `LowLevelKeyboardListener.cs`, `TilingHotKeyService.cs`
+  - packaging and docs: `Installer/CairoShell*.nsi`, `README.md`, `plan.md`
+  - Phase 2: `WindowFilter.cs`, `ManagedWindow.cs`, `WindowIconHelper.cs`, `WindowArranger.cs`, `HiddenWindowJournal.cs`, `TilingManager.cs`, `AppGrabberService.cs`, `CairoDesktop.Interop/User32.cs` (or a new `Shell32.cs`)
 
-**New**
-- `Cairo Desktop/CairoDesktop.Tiling.Core/`
-- `Cairo Desktop/CairoDesktop.Tiling/`
-- `Cairo Desktop/Tests/CairoDesktop.Tiling.Core.Tests/`
-- `CairoDesktop.MenuBar/{TagBar,WindowList}.xaml`
-- `CairoDesktop.MenuBar/Launcher/*`
-- `ShellWindowService` and `WallpaperWindow`
-
-**Deleted**
-- `CairoDesktop.DynamicDesktop/`, `CairoDesktop.Taskbar/`, `Cairo Explorer/`
-- Stacks*, ProgramsMenu*, StacksManager, IDesktopManager, AppGrabberTaskCategoryProvider, TaskViewCommand, AddStack/RemoveStack commands
-
-## Existing code to reuse
-
-- `CairoDesktop.Common/HotKey.cs`, `HotKeyManager.cs`: global hotkeys (RegisterHotKey plus ComponentDispatcher).
-- `CairoDesktop.Infrastructure/DependencyInjection/CairoBackgroundService`: the hosted-service pattern used by `MenuBarHotKeyService` / `ShellHotKeyService`.
-- `CairoDesktop.Infrastructure/Services/CommandService.cs` and `ICairoCommand`: all actions are commands.
-- `CairoDesktop.Infrastructure/Services/WindowManager.cs` (`ScreenState`, `ScreensChanged`): monitor list and change events.
-- `CairoDesktop.Infrastructure/ObjectModel/AppBarWindowService.cs` / `MenuBarWindowService.cs`: per-screen menu bars.
-- `CairoDesktop.Common/Helpers/CursorHelper.IsCursorOnScreen`: picking the "focused screen" for commands.
-- `CairoDesktop.AppGrabber/AppGrabberService.GetApps()`, `LaunchProgram`, `LaunchProgramAdmin`: launcher data and launch.
-- `DesktopManager.CreateShellWindow` logic: moved into `ShellWindowService`.
+**Reuse:**
+- `SendMaskKey`/`VK_MASK` in `LowLevelKeyboardListener`
+- `HiddenWindowJournal.RestoreAll()` for crash recovery
+- `TilingManager.MarkDirty`/`SetState` for cloak-as-minimize
+- `ShellHelper.ActivateApplication` (ManagedShell)
+- the `Build-Installer.ps1` signing helpers (`New-UIAccessCopy`)
+- the TagSet `Minimized` state
 
 ## Verification
 
-1. **Unit tests (Linux, any phase after 3):** `dotnet test "Cairo Desktop/Tests/CairoDesktop.Tiling.Core.Tests"` passes.
-2. **Build (Windows, or Linux with `-p:EnableWindowsTargeting=true`):** `dotnet build "Cairo Desktop/Cairo Desktop.sln" -c Debug` succeeds for all TFMs.
-3. **Manual test in a Windows VM:**
-   - **Dev mode:** run under Explorer with `EnableTilingOutsideShell=true` and `TilingModifier=Alt+Win`. Open 3–4 Notepad and Terminal windows. Check that they tile as a BSP, that directional focus, swap, and resize work, that tags hide and show windows, and that the tag bar and window list update with the focused item highlighted.
-   - **Crash recovery:** kill Cairo with Task Manager while windows sit on hidden tags. Relaunch, and confirm every hidden window reappears. Also confirm the windows reappear on a normal exit.
-   - **Shell mode:** run with `/shell=true` (or as the configured shell). Confirm there is no desktop, taskbar, Stacks, Places, or Programs menu. Confirm the wallpaper is visible, every monitor has a menu bar with its own 10 tags, focus follows the mouse, Win+1..0 and Win+Shift+1..0 work, and the clock, tray, and search extras are present.
-   - **Launcher:** Win+R, type "vsc" or "note", press Enter, and the app launches. The next time, it ranks higher (frecency). Esc and clicking away both close the launcher.
-   - **Multi-monitor:** move a window across monitors with the mouse and with Win+O. Unplug a monitor (or change the VM display count) and confirm its windows move to the primary monitor's tags.
-   - **Exit:** confirm focus-follows-mouse SPI values are restored afterwards (`SystemParametersInfo` gets show the original values).
-   - **Win+L / Win+P:**
-     - In shell mode, Win+L focuses right and does not lock.
-     - Win+P locks. After unlocking, Win+L still doesn't lock.
-     - The Cairo menu's "Lock" item still works.
-     - Exit Cairo normally: `DisableLockWorkstation` is back to its original value (absent), and Win+L locks under Explorer again.
-     - Kill Cairo with Task Manager, then relaunch and exit: the value is restored then too.
-     - Record which path made Win+L bindable (`RegisterHotKey` or the low-level hook).
+**Build:** `dotnet build` the solution and run the existing `Tests/CairoDesktop.Tiling.Core.Tests`.
+
+**Phase 1:**
+1. `Deploy-Cairo.ps1`, then `Enable-CairoShellLauncher.ps1`, then sign out and back in. Cairo comes up with no Explorer. `Get-ShellDiagnostics.ps1` shows Cairo's parent is the supervisor, whose parent is CustomShellHost.
+2. Startup apps from the `Run` key start exactly once.
+3. Cairo menu → Restart: Cairo exits with 3 and Shell Launcher starts it again. Tiled windows come back.
+4. Kill `CairoDesktop.UIAccess.exe` from Task Manager: it restarts (crash → `RestartShell`). Kill it 3 times quickly: the crash-loop guard opens Task Manager and Cairo stays down.
+5. Tapping Win alone does nothing, and Ctrl+Esc does nothing. Win+1…9, Win+R and Win+drag still work.
+6. `ms-settings:`, the Settings command, Calculator and the Store open. Action Center opens from the menu bar.
+7. `Disable-CairoShellLauncher.ps1`, then sign out and back in: Explorer is back. The recovery path from Task Manager works.
+8. **Installer:**
+   - Fresh install with "Use Cairo as my shell": the checklist shows the edition, the account (your console user) and the signature, the finish page offers Sign out, and Cairo is the shell after sign-in.
+   - Reinstall with `/S`: the mode is kept, with no prompts.
+   - Install with "Alongside Explorer": only the `Run` value is written, and no Shell Launcher config exists.
+   - On a Pro VM: the shell choice is disabled, with the reason shown.
+   - Uninstall: the Shell Launcher config is removed before the files, and the next sign-in gets Explorer.
+9. **First startup:** install with the shell choice, but don't sign out. Starting Cairo shows the Setup check with "Sign out to start Cairo as your shell". After sign-in, the check passes and doesn't appear again.
+
+**Phase 2:**
+- With Calculator, Settings and Notepad on one tag: tile, swap, resize, Win+drag, float, and move each to another tag and another monitor.
+- Switch tags back and forth: UWP windows come back drawn and responsive.
+- Minimize and restore. Switch virtual desktops and come back: the windows keep their tags.
+- Close a UWP app: it leaves the window list, and no ghost frame stays behind.
+- F11 in a UWP app goes fullscreen.
+- The window list shows the real app icon and name.
+- A float rule on `Calculator.exe` floats it.
+- Kill Cairo while a UWP window is parked or hidden: the next start restores it.

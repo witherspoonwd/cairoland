@@ -152,9 +152,10 @@ namespace CairoDesktop.Tiling
                 }
             }
 
-            if (_hookEntries.Count > 0)
+            // under Shell Launcher a lone Win opens a Start menu that can't be used, so the hook also masks it
+            if (_hookEntries.Count > 0 || ShellHost.IsShellLauncher)
             {
-                _keyboardListener = new LowLevelKeyboardListener();
+                _keyboardListener = new LowLevelKeyboardListener { MaskLoneWin = ShellHost.IsShellLauncher };
                 _keyboardListener.OnKeyDown += KeyboardListener_OnKeyDown;
                 _keyboardListener.HookKeyboard();
             }

@@ -1,9 +1,12 @@
+using CairoDesktop.Common;
 using ManagedShell.AppBar;
 using ManagedShell.Common.Helpers;
 using ManagedShell.Common.Logging;
 using Microsoft.Win32;
 using System;
 using System.ComponentModel;
+using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -13,12 +16,32 @@ using NativeMethods = ManagedShell.Interop.NativeMethods;
 namespace CairoDesktop.Services
 {
     /// <summary>
-    /// Borderless, bottom-most window that paints the system wallpaper on one screen.
-    /// It is parented to the shell window, so it is only used when Cairo is the shell.
+    /// Borderless, bottom-most window that paints the desktop background on one screen: Cairo's own image when
+    /// <see cref="Settings.DesktopBackgroundPath"/> is set, otherwise the Windows wallpaper. It is a child of the
+    /// shell window when Cairo owns one; under Shell Launcher, where CustomShellHost owns it, it is a top-level
+    /// window kept at the bottom of the z-order.
     /// </summary>
     public class WallpaperWindow : Window
     {
+        private const int WM_WINDOWPOSCHANGING = 0x0046;
+        private const int WM_SETTINGCHANGE = 0x001A;
+        private const int SPI_SETDESKWALLPAPER = 0x0014;
+        private const uint SWP_NOZORDER = 0x0004;
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct WINDOWPOS
+        {
+            public IntPtr hwnd;
+            public IntPtr hwndInsertAfter;
+            public int x;
+            public int y;
+            public int cx;
+            public int cy;
+            public uint flags;
+        }
+
         private readonly IntPtr _parentHandle;
+        private readonly Settings _settings;
 
         public AppBarScreen Screen { get; private set; }
 
@@ -26,10 +49,11 @@ namespace CairoDesktop.Services
 
         public bool AllowClose { get; set; }
 
-        public WallpaperWindow(AppBarScreen screen, IntPtr parentHandle)
+        public WallpaperWindow(AppBarScreen screen, IntPtr parentHandle, Settings settings)
         {
             Screen = screen;
             _parentHandle = parentHandle;
+            _settings = settings;
 
             Title = "";
             WindowStyle = WindowStyle.None;
@@ -68,10 +92,24 @@ namespace CairoDesktop.Services
 
         private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
         {
-            if (msg == (int)NativeMethods.WM.MOUSEACTIVATE)
+            switch (msg)
             {
-                handled = true;
-                return (IntPtr)NativeMethods.MA_NOACTIVATE;
+                case (int)NativeMethods.WM.MOUSEACTIVATE:
+                    handled = true;
+                    return (IntPtr)NativeMethods.MA_NOACTIVATE;
+                case WM_WINDOWPOSCHANGING when _parentHandle == IntPtr.Zero:
+                    // top-level: whoever moves us in the z-order, stay at the bottom
+                    WINDOWPOS pos = Marshal.PtrToStructure<WINDOWPOS>(lParam);
+                    if ((pos.flags & SWP_NOZORDER) == 0 && pos.hwndInsertAfter != (IntPtr)NativeMethods.WindowZOrder.HWND_BOTTOM)
+                    {
+                        pos.hwndInsertAfter = (IntPtr)NativeMethods.WindowZOrder.HWND_BOTTOM;
+                        Marshal.StructureToPtr(pos, lParam, false);
+                    }
+                    break;
+                case WM_SETTINGCHANGE when _parentHandle == IntPtr.Zero && wParam.ToInt32() == SPI_SETDESKWALLPAPER:
+                    // without our own shell window, nothing else tells us the Windows wallpaper changed
+                    ReloadBackground();
+                    break;
             }
 
             return IntPtr.Zero;
@@ -118,13 +156,30 @@ namespace CairoDesktop.Services
         {
             try
             {
-                Background = GetWallpaperBrush() ?? GetBackgroundColorBrush();
+                Background = GetCairoBackgroundBrush() ?? GetWallpaperBrush() ?? GetBackgroundColorBrush();
             }
             catch (Exception ex)
             {
                 ShellLogger.Error($"WallpaperWindow: Failed setting wallpaper: {ex.Message}");
                 Background = GetBackgroundColorBrush();
             }
+        }
+
+        private Brush GetCairoBackgroundBrush()
+        {
+            string path = Environment.ExpandEnvironmentVariables(_settings.DesktopBackgroundPath ?? "");
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return null;
+            }
+
+            if (!File.Exists(path))
+            {
+                ShellLogger.Warning($"WallpaperWindow: Desktop background {path} doesn't exist; using the Windows wallpaper");
+                return null;
+            }
+
+            return CreateImageBrush(path, _settings.DesktopBackgroundStyle);
         }
 
         private static Brush GetWallpaperBrush()
@@ -135,12 +190,45 @@ namespace CairoDesktop.Services
 
             if (string.IsNullOrWhiteSpace(wallpaper) || !ShellHelper.Exists(wallpaper))
             {
-                return null;
+                // slideshows and Spotlight leave the registry value empty but keep the current image here
+                wallpaper = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), @"Microsoft\Windows\Themes\TranscodedWallpaper");
+                if (!File.Exists(wallpaper))
+                {
+                    return null;
+                }
             }
 
+            // https://docs.microsoft.com/en-us/windows/desktop/Controls/themesfileformat-overview
+            string style;
+            switch ($"{regWallpaperStyle}{regTileWallpaper}")
+            {
+                case "01":
+                    style = "Tile";
+                    break;
+                case "00":
+                    style = "Center";
+                    break;
+                case "60":
+                    style = "Fit";
+                    break;
+                case "100":
+                case "220": // Span (per-screen fill for now)
+                    style = "Fill";
+                    break;
+                case "20":
+                default:
+                    style = "Stretch";
+                    break;
+            }
+
+            return CreateImageBrush(wallpaper, style);
+        }
+
+        private static Brush CreateImageBrush(string path, string style)
+        {
             BitmapImage bitmap = new BitmapImage();
             bitmap.BeginInit();
-            bitmap.UriSource = new Uri(wallpaper, UriKind.Absolute);
+            bitmap.UriSource = new Uri(path, UriKind.Absolute);
             bitmap.CacheOption = BitmapCacheOption.OnLoad; // don't keep the file locked
             bitmap.EndInit();
             bitmap.Freeze();
@@ -152,10 +240,9 @@ namespace CairoDesktop.Services
                 TileMode = TileMode.None
             };
 
-            // https://docs.microsoft.com/en-us/windows/desktop/Controls/themesfileformat-overview
-            switch ($"{regWallpaperStyle}{regTileWallpaper}")
+            switch (style)
             {
-                case "01": // Tiled
+                case "Tile":
                     brush.AlignmentX = AlignmentX.Left;
                     brush.AlignmentY = AlignmentY.Top;
                     brush.TileMode = TileMode.Tile;
@@ -163,19 +250,18 @@ namespace CairoDesktop.Services
                     brush.Viewport = new Rect(0, 0, bitmap.PixelWidth, bitmap.PixelHeight);
                     brush.ViewportUnits = BrushMappingMode.Absolute;
                     break;
-                case "00": // Centered
+                case "Center":
                     brush.Stretch = Stretch.None;
                     break;
-                case "60": // Fit
+                case "Fit":
                     brush.Stretch = Stretch.Uniform;
                     break;
-                case "100": // Fill
-                case "220": // Span (per-screen fill for now)
-                    brush.Stretch = Stretch.UniformToFill;
-                    break;
-                case "20": // Stretched
-                default:
+                case "Stretch":
                     brush.Stretch = Stretch.Fill;
+                    break;
+                case "Fill":
+                default:
+                    brush.Stretch = Stretch.UniformToFill;
                     break;
             }
 

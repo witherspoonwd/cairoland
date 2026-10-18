@@ -286,6 +286,9 @@ namespace CairoDesktop.Interop
         [DllImport(User32_DllName)]
         public static extern IntPtr GetWindow(IntPtr hWnd, uint uCmd);
 
+        [DllImport(User32_DllName, CharSet = CharSet.Unicode)]
+        public static extern IntPtr FindWindowEx(IntPtr hWndParent, IntPtr hWndChildAfter, string lpszClass, string lpszWindow);
+
         [DllImport(User32_DllName)]
         public static extern IntPtr GetAncestor(IntPtr hWnd, uint gaFlags);
 

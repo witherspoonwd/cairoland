@@ -285,7 +285,8 @@ $text = $text.Replace('"..\Cairo Desktop\', '"' + $repoRoot + '\Cairo Desktop\')
 # Compile
 $profileScript = Join-Path $stagingDir "CairoShell_$PublishProfile.nsi"
 Write-Host "Compiling $profileScript..."
-& $makensis /V2 $profileScript
+# the Shell Launcher scripts (Enable-, Disable-CairoShellLauncher.ps1, ...) live in the repo root
+& $makensis /V2 "/DSETUPSCRIPTS=$repoRoot\" $profileScript
 if ($LASTEXITCODE -ne 0) {
     Write-Error "makensis failed (exit code $LASTEXITCODE)."
 }

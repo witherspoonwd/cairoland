@@ -132,12 +132,8 @@ namespace CairoDesktop.Tiling
             }
 
             _listener.Start();
+            // when the lock policy is unwritable, Cairo's Setup check offers the fix at startup
             _lockManager.Enable();
-            if (_lockManager.IsUnavailable)
-            {
-                // after startup settles, so the prompt isn't buried behind restored windows
-                _dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() => LockPolicyPrompt.ShowIfNeeded(_lockManager)));
-            }
             _focusFollowsMouse.Enable();
             _dragger.Enable();
 
@@ -184,7 +180,7 @@ namespace CairoDesktop.Tiling
             {
                 if (window.IsHiddenByUs)
                 {
-                    _arranger.Show(window.Hwnd);
+                    _arranger.Show(window);
                 }
             }
 
@@ -522,14 +518,16 @@ namespace CairoDesktop.Tiling
                     OnShown(e.Hwnd);
                     break;
                 case WinEventKind.Uncloaked:
-                    OnShown(e.Hwnd, ignoreExpected: true);
+                    OnUncloaked(e.Hwnd);
                     break;
                 case WinEventKind.Hidden:
                     OnHidden(e.Hwnd);
                     break;
                 case WinEventKind.Cloaked:
+                    OnCloaked(e.Hwnd);
+                    break;
                 case WinEventKind.Destroyed:
-                    Unmanage(e.Hwnd);
+                    OnDestroyed(e.Hwnd);
                     break;
                 case WinEventKind.Foreground:
                     _mouseFocusedMonitor = null;
@@ -578,6 +576,112 @@ namespace CairoDesktop.Tiling
             }
 
             TryManage(hwnd, focus: true);
+        }
+
+        /// <summary>
+        /// Windows cloaks windows on other virtual desktops and suspended UWP apps. Treat that like a minimize, so
+        /// the window keeps its tag; a UWP frame whose app is gone is a closed app, though.
+        /// </summary>
+        private void OnCloaked(IntPtr hwnd)
+        {
+            if (!_windows.TryGetValue(hwnd, out ManagedWindow window) || window.IsSystemCloaked)
+            {
+                return;
+            }
+
+            if (!User32.IsWindow(hwnd) || (window.IsFrameWindow && !UwpWindowHelper.HasCoreWindow(hwnd)))
+            {
+                Unmanage(hwnd);
+                return;
+            }
+
+            MonitorState monitor = FindOwner(hwnd);
+            if (monitor == null)
+            {
+                Unmanage(hwnd);
+                return;
+            }
+
+            window.IsSystemCloaked = true;
+            window.StateBeforeCloak = monitor.TagSet.GetState(window.Id);
+            _logger.LogDebug($"Tiling: {window} was cloaked; keeping it as minimized");
+
+            if (window.StateBeforeCloak == WindowState.Minimized)
+            {
+                UpdateViewModel(monitor);
+                return;
+            }
+
+            bool wasFocused = IsFocusedOnSelectedTag(monitor, window.Id);
+            long? next = wasFocused ? PickNextFocus(monitor, window.Id) : null;
+
+            monitor.TagSet.SetState(window.Id, WindowState.Minimized);
+            MarkDirty(monitor);
+
+            if (next.HasValue)
+            {
+                FocusId(monitor, next.Value);
+            }
+        }
+
+        private void OnUncloaked(IntPtr hwnd)
+        {
+            if (!_windows.TryGetValue(hwnd, out ManagedWindow window) || !window.IsSystemCloaked)
+            {
+                // new UWP frames appear by uncloaking
+                OnShown(hwnd, ignoreExpected: true);
+                return;
+            }
+
+            window.IsSystemCloaked = false;
+            WindowState? previous = window.StateBeforeCloak;
+            window.StateBeforeCloak = null;
+
+            if (window.IsFrameWindow && !UwpWindowHelper.HasCoreWindow(hwnd))
+            {
+                // the frame is being reused or is left over; its app is gone
+                Unmanage(hwnd);
+                OnShown(hwnd, ignoreExpected: true);
+                return;
+            }
+
+            MonitorState monitor = FindOwner(hwnd);
+            if (monitor == null)
+            {
+                return;
+            }
+
+            window.ResolveAppIdentity();
+            _logger.LogDebug($"Tiling: {window} was uncloaked");
+
+            if (previous.HasValue && previous.Value != WindowState.Minimized && !User32.IsIconic(hwnd))
+            {
+                monitor.TagSet.SetState(window.Id, previous.Value);
+                if (monitor.TagSet.GetTagIndex(window.Id) != monitor.TagSet.SelectedIndex)
+                {
+                    HandleActivationOnHiddenTag(window);
+                }
+            }
+
+            MarkDirty(monitor);
+        }
+
+        private void OnDestroyed(IntPtr hwnd)
+        {
+            if (_windows.ContainsKey(hwnd))
+            {
+                Unmanage(hwnd);
+                return;
+            }
+
+            // a UWP app closing destroys its CoreWindow; its frame may stay behind, cloaked
+            foreach (ManagedWindow frame in _windows.Values.Where(w => w.IsFrameWindow && w.IsSystemCloaked).ToList())
+            {
+                if (!UwpWindowHelper.HasCoreWindow(frame.Hwnd))
+                {
+                    Unmanage(frame.Hwnd);
+                }
+            }
         }
 
         private void OnHidden(IntPtr hwnd)
@@ -641,7 +745,7 @@ namespace CairoDesktop.Tiling
                 monitor.TagSet.Tags[tagIndex.Value].IsUrgent = true;
                 if (User32.IsWindowVisible(window.Hwnd))
                 {
-                    _arranger.Hide(window.Hwnd);
+                    _arranger.Hide(window);
                     window.IsHiddenByUs = true;
                 }
 
@@ -774,6 +878,13 @@ namespace CairoDesktop.Tiling
             if (_windows.TryGetValue(hwnd, out ManagedWindow window))
             {
                 window.RefreshTitle();
+
+                // a UWP frame gets its app after it appears; float rules may match it now
+                if (window.ResolveAppIdentity() && !window.IsFloating && _filter.ShouldManage(hwnd) == FilterResult.Float)
+                {
+                    ToggleFloating(hwnd);
+                }
+
                 return;
             }
 
@@ -786,7 +897,8 @@ namespace CairoDesktop.Tiling
 
         private void OnLocationChanged(IntPtr hwnd)
         {
-            if (hwnd == _moveSizeHwnd || !_windows.TryGetValue(hwnd, out ManagedWindow window))
+            // parked windows (HideMode.Offscreen) move because we moved them
+            if (hwnd == _moveSizeHwnd || !_windows.TryGetValue(hwnd, out ManagedWindow window) || window.IsHiddenByUs || window.IsSystemCloaked)
             {
                 return;
             }
@@ -823,12 +935,13 @@ namespace CairoDesktop.Tiling
 
         /// <summary>
         /// Games and video players that cover the monitor without a caption are treated as fullscreen and left
-        /// alone. Returns true if the window's fullscreen state changed.
+        /// alone. UWP frames keep WS_CAPTION when their app goes fullscreen, so for them covering the monitor is
+        /// enough. Returns true if the window's fullscreen state changed.
         /// </summary>
         private static bool UpdateAutoFullscreen(ManagedWindow window, MonitorState monitor, Tag tag)
         {
             bool coversMonitor = WindowArranger.GetVisibleRect(window.Hwnd) == monitor.Bounds
-                && (User32.GetWindowLongPtr(window.Hwnd, User32.GWL_STYLE) & User32.WS_CAPTION) != User32.WS_CAPTION;
+                && (window.IsFrameWindow || (User32.GetWindowLongPtr(window.Hwnd, User32.GWL_STYLE) & User32.WS_CAPTION) != User32.WS_CAPTION);
 
             if (coversMonitor && !window.IsAutoFullscreen && tag.FullscreenWindow == null)
             {
@@ -875,6 +988,7 @@ namespace CairoDesktop.Tiling
                 IsFloating = result == FilterResult.Float,
                 HMonitor = monitor.HMonitor
             };
+            window.HideMode = window.IsFrameWindow && _settings.TilingParkUwpWindows ? HideMode.Offscreen : HideMode.Hide;
 
             if (window.IsFloating)
             {
@@ -950,12 +1064,12 @@ namespace CairoDesktop.Tiling
             if (visible && window.IsHiddenByUs)
             {
                 window.IsHiddenByUs = false;
-                _arranger.Show(hwnd);
+                _arranger.Show(window);
             }
             else if (!visible && !window.IsHiddenByUs)
             {
                 window.IsHiddenByUs = true;
-                _arranger.Hide(hwnd);
+                _arranger.Hide(window);
             }
         }
 
@@ -1216,7 +1330,9 @@ namespace CairoDesktop.Tiling
             UpdateTags(monitor);
 
             ScreenTagsViewModel model = monitor.ViewModel;
-            List<long> visible = monitor.TagSet.SelectedTag.VisibleWindows.Where(id => _windows.ContainsKey(new IntPtr(id))).ToList();
+            // windows Windows cloaked (other virtual desktops, suspended apps) stay out of the list
+            List<long> visible = monitor.TagSet.SelectedTag.VisibleWindows
+                .Where(id => _windows.TryGetValue(new IntPtr(id), out ManagedWindow managed) && !managed.IsSystemCloaked).ToList();
 
             // keep existing items so icons and bindings survive
             for (int i = model.Windows.Count - 1; i >= 0; i--)
@@ -1301,7 +1417,7 @@ namespace CairoDesktop.Tiling
                 if (_windows.TryGetValue(new IntPtr(id), out ManagedWindow window) && window.IsHiddenByUs)
                 {
                     window.IsHiddenByUs = false;
-                    _arranger.Show(window.Hwnd);
+                    _arranger.Show(window);
                 }
             }
 
@@ -1310,7 +1426,7 @@ namespace CairoDesktop.Tiling
                 if (_windows.TryGetValue(new IntPtr(id), out ManagedWindow window) && !window.IsHiddenByUs)
                 {
                     window.IsHiddenByUs = true;
-                    _arranger.Hide(window.Hwnd);
+                    _arranger.Hide(window);
                 }
             }
 
@@ -1670,6 +1786,28 @@ namespace CairoDesktop.Tiling
             }
 
             FocusId(monitor, window.Id);
+        }
+
+        public IDisposable SuspendFocusFollowsMouse()
+        {
+            _focusFollowsMouse.Suspend();
+            return new FocusFollowsMouseSuspension(_focusFollowsMouse);
+        }
+
+        private sealed class FocusFollowsMouseSuspension : IDisposable
+        {
+            private FocusFollowsMouse _focusFollowsMouse;
+
+            public FocusFollowsMouseSuspension(FocusFollowsMouse focusFollowsMouse)
+            {
+                _focusFollowsMouse = focusFollowsMouse;
+            }
+
+            public void Dispose()
+            {
+                _focusFollowsMouse?.Resume();
+                _focusFollowsMouse = null;
+            }
         }
 
         #endregion

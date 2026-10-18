@@ -75,6 +75,7 @@ namespace CairoDesktop
 
             loadThemes();
             loadLanguages();
+            loadDesktopBackground();
             loadRadioGroups();
             loadHotKeys();
             loadLoggingLevels();
@@ -98,6 +99,9 @@ namespace CairoDesktop
                 case "MenuBarEdge":
                 case "SysTrayAlwaysExpanded":
                     loadRadioGroups();
+                    break;
+                case "DesktopBackgroundPath":
+                    loadDesktopBackground();
                     break;
             }
         }
@@ -465,13 +469,19 @@ namespace CairoDesktop
                 chkEnableMenuExtraActionCenter.Visibility = Visibility.Collapsed;
                 chkEnableMenuExtraVolume.Visibility = Visibility.Collapsed;
             }
-            else if (EnvironmentHelper.IsWindows10OrBetter && !EnvironmentHelper.IsAppRunningAsShell)
+            else
             {
-                chkEnableMenuExtraVolume.Visibility = Visibility.Collapsed;
-            }
-            else if (EnvironmentHelper.IsWindows10OrBetter && EnvironmentHelper.IsAppRunningAsShell)
-            {
-                chkEnableMenuExtraActionCenter.Visibility = Visibility.Collapsed;
+                // Explorer's volume icon is only missing when Cairo is the shell (Shell Launcher included)
+                if (!EnvironmentHelper.IsAppRunningAsShell)
+                {
+                    chkEnableMenuExtraVolume.Visibility = Visibility.Collapsed;
+                }
+
+                // Action Center needs the immersive shell, which Shell Launcher keeps
+                if (!ShellHost.HasImmersiveShell)
+                {
+                    chkEnableMenuExtraActionCenter.Visibility = Visibility.Collapsed;
+                }
             }
         }
 
@@ -647,10 +657,16 @@ namespace CairoDesktop
 
         private void checkRunAtLogOn()
         {
-            if (EnvironmentHelper.IsAppConfiguredAsShell.Equals(true))
+            // Shell Launcher starts Cairo; a Run value would start it twice
+            if (ShellHost.IsConfiguredAsShellLauncher || ShellHost.IsShellLauncher)
             {
                 chkRunAtLogOn.Visibility = Visibility.Collapsed;
             }
+
+            txtShellStatus.Text = ShellHost.IsShellLauncher ? DisplayString.sSettings_Advanced_ShellLauncherActive
+                : ShellHost.IsConfiguredAsShellLauncher ? DisplayString.sSettings_Advanced_ShellLauncherPending
+                : EnvironmentHelper.IsAppRunningAsShell ? DisplayString.sSettings_Advanced_OldShell
+                : DisplayString.sSettings_Advanced_ExplorerIsShell;
 
             try
             {
@@ -779,18 +795,40 @@ namespace CairoDesktop
 
         private void btnChangeShell_Click(object sender, RoutedEventArgs e)
         {
-            btnChangeShell.IsEnabled = false;
+            // switching between Explorer and Shell Launcher goes through the same Setup check as first startup
+            Welcome.ShowSetupCheck(_cairoApplication, _settings, _uiService.SetupCheck);
+        }
 
-            EnvironmentHelper.IsAppConfiguredAsShell = !EnvironmentHelper.IsAppConfiguredAsShell;
+        private void loadDesktopBackground()
+        {
+            bool custom = !string.IsNullOrEmpty(_settings.DesktopBackgroundPath);
+            txtDesktopBackground.Text = custom ? _settings.DesktopBackgroundPath : DisplayString.sSettings_General_BackgroundWindows;
+            btnResetDesktopBackground.IsEnabled = custom;
+            // the Windows wallpaper keeps the fit chosen in Windows
+            cboDesktopBackgroundStyle.IsEnabled = custom;
+        }
 
-            CairoMessage.ShowOkCancel(Common.Localization.DisplayString.sSettings_Advanced_ShellChangedText,
-                Common.Localization.DisplayString.sSettings_Advanced_ShellChanged, CairoMessageImage.LogOff,
-                Common.Localization.DisplayString.sSettings_Advanced_LogOffNow, Common.Localization.DisplayString.sSettings_Advanced_LogOffLater,
-                result =>
+        private void btnBrowseDesktopBackground_Click(object sender, RoutedEventArgs e)
+        {
+            string current = _settings.DesktopBackgroundPath;
+            using (OpenFileDialog dlg = new OpenFileDialog
+            {
+                Filter = "Images|*.jpg;*.jpeg;*.png;*.bmp;*.gif;*.tif;*.tiff;*.jfif|All files|*.*",
+                InitialDirectory = !string.IsNullOrEmpty(current) && File.Exists(current)
+                    ? Path.GetDirectoryName(current)
+                    : Environment.GetFolderPath(Environment.SpecialFolder.MyPictures)
+            })
+            {
+                if (dlg.SafeShowDialog() == System.Windows.Forms.DialogResult.OK && File.Exists(dlg.FileName))
                 {
-                    if (result == true)
-                        ShellHelper.Logoff();
-                });
+                    _settings.DesktopBackgroundPath = dlg.FileName;
+                }
+            }
+        }
+
+        private void btnResetDesktopBackground_Click(object sender, RoutedEventArgs e)
+        {
+            _settings.DesktopBackgroundPath = "";
         }
 
         private void btnOpenLogsFolder_OnClick(object sender, RoutedEventArgs e)

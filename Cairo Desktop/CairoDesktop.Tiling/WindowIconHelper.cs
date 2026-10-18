@@ -11,7 +11,60 @@ namespace CairoDesktop.Tiling
 {
     public static class WindowIconHelper
     {
+        private const int AppIconSize = 32;
+
         private static readonly Dictionary<IntPtr, ImageSource> Cache = new Dictionary<IntPtr, ImageSource>();
+        private static readonly Dictionary<string, ImageSource> AppCache = new Dictionary<string, ImageSource>(StringComparer.OrdinalIgnoreCase);
+
+        public static ImageSource GetIcon(ManagedWindow window)
+        {
+            // UWP frames don't expose their icon through the window; the app's Start menu entry has it
+            if (window.IsFrameWindow)
+            {
+                return string.IsNullOrEmpty(window.AppUserModelId) ? null : GetAppIcon(window.AppUserModelId);
+            }
+
+            return GetIcon(window.Hwnd, window.ClassName);
+        }
+
+        /// <summary>The icon of shell:AppsFolder\&lt;aumid&gt;, cached per app.</summary>
+        public static ImageSource GetAppIcon(string appUserModelId)
+        {
+            if (AppCache.TryGetValue(appUserModelId, out ImageSource cached))
+            {
+                return cached;
+            }
+
+            ImageSource icon = null;
+            IntPtr bitmap = IntPtr.Zero;
+            try
+            {
+                bitmap = Shell32.GetAppIconBitmap(appUserModelId, AppIconSize);
+                int width = 0;
+                int height = 0;
+                byte[] pixels = bitmap != IntPtr.Zero ? Shell32.GetBitmapPixels(bitmap, out width, out height) : null;
+                if (pixels != null)
+                {
+                    BitmapSource source = BitmapSource.Create(width, height, 96, 96, PixelFormats.Pbgra32, null, pixels, width * 4);
+                    source.Freeze();
+                    icon = source;
+                }
+            }
+            catch (Exception ex)
+            {
+                ShellLogger.Debug($"WindowIconHelper: Unable to load the icon for {appUserModelId}: {ex.Message}");
+            }
+            finally
+            {
+                if (bitmap != IntPtr.Zero)
+                {
+                    Shell32.DeleteObject(bitmap);
+                }
+            }
+
+            AppCache[appUserModelId] = icon;
+            return icon;
+        }
 
         public static ImageSource GetIcon(IntPtr hwnd, string className)
         {
@@ -22,8 +75,7 @@ namespace CairoDesktop.Tiling
 
             ImageSource icon = null;
 
-            // UWP frame windows don't expose their icon this way; they get no icon in v1
-            if (className != "ApplicationFrameWindow")
+            if (!UwpWindowHelper.IsFrame(className))
             {
                 IntPtr hIcon = GetIconHandle(hwnd);
                 if (hIcon != IntPtr.Zero)

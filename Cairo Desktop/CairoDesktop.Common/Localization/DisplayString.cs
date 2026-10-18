@@ -422,6 +422,28 @@ namespace CairoDesktop.Common.Localization
 
         public static string sSettings_General_ThemeTooltip => getString();
 
+        public static string sSettings_General_Background => getString();
+
+        public static string sSettings_General_BackgroundTooltip => getString();
+
+        public static string sSettings_General_BackgroundWindows => getString();
+
+        public static string sSettings_General_BackgroundBrowse => getString();
+
+        public static string sSettings_General_BackgroundReset => getString();
+
+        public static string sSettings_General_BackgroundStyle => getString();
+
+        public static string sSettings_General_BackgroundFill => getString();
+
+        public static string sSettings_General_BackgroundFit => getString();
+
+        public static string sSettings_General_BackgroundStretch => getString();
+
+        public static string sSettings_General_BackgroundCenter => getString();
+
+        public static string sSettings_General_BackgroundTile => getString();
+
         public static string sSettings_General_TimeFormat => getString();
 
         public static string sSettings_General_TimeFormatTooltip => getString();
@@ -735,6 +757,74 @@ namespace CairoDesktop.Common.Localization
         public static string sLockFix_Fixed => getString();
 
         public static string sLockFix_Failed => getString();
+
+        public static string sCrashLoop_Title => getString();
+
+        public static string sCrashLoop_Message => getString();
+
+        public static string sSetupCheck_Title => getString();
+
+        public static string sSetupCheck_Intro => getString();
+
+        public static string sSetupCheck_Running => getString();
+
+        public static string sSetupCheck_CheckAgain => getString();
+
+        public static string sSetupCheck_Done => getString();
+
+        public static string sSetupCheck_EnvironmentUnavailable => getString();
+
+        public static string sSetupCheck_ShellLauncherActive => getString();
+
+        public static string sSetupCheck_UseExplorer => getString();
+
+        public static string sSetupCheck_ShellLauncherForeign => getString();
+
+        public static string sSetupCheck_ShellLauncherForeignDetail => getString();
+
+        public static string sSetupCheck_Reapply => getString();
+
+        public static string sSetupCheck_SignOutToFinish => getString();
+
+        public static string sSetupCheck_SignOutToFinishDetail => getString();
+
+        public static string sSetupCheck_SignOut => getString();
+
+        public static string sSetupCheck_ShellLauncherMissing => getString();
+
+        public static string sSetupCheck_ShellLauncherMissingDetail => getString();
+
+        public static string sSetupCheck_OldShell => getString();
+
+        public static string sSetupCheck_OldShellDetail => getString();
+
+        public static string sSetupCheck_UseCairoAsShell => getString();
+
+        public static string sSetupCheck_ExplorerIsShell => getString();
+
+        public static string sSetupCheck_DuplicateRun => getString();
+
+        public static string sSetupCheck_DuplicateRunDetail => getString();
+
+        public static string sSetupCheck_Remove => getString();
+
+        public static string sSetupCheck_OldWinlogon => getString();
+
+        public static string sSetupCheck_LockPolicyDetail => getString();
+
+        public static string sSetupCheck_ScriptMissing => getString();
+
+        public static string sSetupCheck_FixFailed => getString();
+
+        public static string sSetupCheck_RestartToFinish => getString();
+
+        public static string sSettings_Advanced_ShellSetup => getString();
+
+        public static string sSettings_Advanced_ShellLauncherActive => getString();
+
+        public static string sSettings_Advanced_ShellLauncherPending => getString();
+
+        public static string sSettings_Advanced_OldShell => getString();
 
         public static string sSettings_Shortcuts => getString();
 
